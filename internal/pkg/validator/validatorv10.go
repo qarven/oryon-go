@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"regexp"
 
 	"github.com/go-playground/locales/en"
@@ -100,7 +101,7 @@ func (v *V10Validator) Validate(data any) error {
 //nolint:errcheck,gosec,forcetypeassert // make linter silent
 func v10CustomValidation(validate *validator.Validate, enTrans ut.Translator) {
 	validate.RegisterValidation("password", func(fl validator.FieldLevel) bool {
-		p, ok := fl.Field().Interface().(string)
+		p, ok := reflect.TypeAssert[string](fl.Field())
 		if !ok {
 			return false
 		}

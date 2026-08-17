@@ -27,6 +27,8 @@ import (
 type Instrumentation interface {
 	Tracer(name string) trace.Tracer
 	Meter(name string) metric.Meter
+	TracerProvider() trace.TracerProvider
+	MeterProvider() metric.MeterProvider
 	Shutdown(ctx context.Context) error
 }
 
@@ -173,6 +175,16 @@ func (o *otelInstrumentation) Meter(name string) metric.Meter {
 	return o.meterProvider.Meter(name)
 }
 
+// TracerProvider returns the underlying tracer provider.
+func (o *otelInstrumentation) TracerProvider() trace.TracerProvider {
+	return o.tracerProvider
+}
+
+// MeterProvider returns the underlying meter provider.
+func (o *otelInstrumentation) MeterProvider() metric.MeterProvider {
+	return o.meterProvider
+}
+
 // Shutdown flushes and stops tracing, metrics, and logs.
 func (o *otelInstrumentation) Shutdown(ctx context.Context) error {
 	return errors.Join([]error{
@@ -203,6 +215,16 @@ func (n *noopInstrumentation) Tracer(name string) trace.Tracer {
 // Meter returns a no-op meter.
 func (n *noopInstrumentation) Meter(name string) metric.Meter {
 	return n.meterProvider.Meter(name)
+}
+
+// TracerProvider returns the no-op tracer provider.
+func (n *noopInstrumentation) TracerProvider() trace.TracerProvider {
+	return n.tracerProvider
+}
+
+// MeterProvider returns the no-op meter provider.
+func (n *noopInstrumentation) MeterProvider() metric.MeterProvider {
+	return n.meterProvider
 }
 
 // Shutdown is a no-op for the noop instrumentation.

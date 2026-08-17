@@ -20,8 +20,6 @@ func (a *App) initModules() {
 			DBConn:       a.dbConn,
 			CacheConn:    a.cacheConn,
 			Goroutine:    a.goroutine,
-			AccessJWT:    a.accessJWT,
-			RefreshJWT:   a.refreshJWT,
 			Interceptors: a.interceptors,
 			Muxer:        a.muxer,
 		})

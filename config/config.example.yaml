@@ -126,6 +126,33 @@ database:
     max_conn_idle_seconds: 300
     health_check_period_seconds: 60
 
+  # Query observability via otelpgx (OpenTelemetry for pgx).
+  # Production-ready defaults: trim span names, never include params, sample via trace_sample_ratio.
+  observability:
+    # Master toggle. false = disable pgx tracer + pool stats (zero overhead).
+    enabled: true
+
+    # Trim span name to first SQL word (SELECT/INSERT/UPDATE/DELETE) to reduce cardinality.
+    # false = full SQL as span name (verbose, useful for local). true = recommended for prod.
+    trim_sql_span_name: true
+
+    # Disable db.query.text attribute. false keeps SQL in span (needed for slow-query debug).
+    # true saves bytes/PII but loses query visibility. Keep false unless compliance requires.
+    disable_sql_statement: false
+
+    # NEVER true in prod/stg - leaks query args (PII/secrets) as pgx.query.parameters.
+    # Only enable temporarily for local debug.
+    include_params: false
+
+    # Disable host/port/db/user attributes on spans.
+    disable_connection_details: false
+
+    # Disable extra acquire span (pool checkout) to cut ~1 span per query. Keep false for latency insight.
+    disable_acquire_tracer: false
+
+    # Interval for pgxpool.* observable metrics. Local 1s, prod 5-10s to cut metric volume.
+    pool_stats_interval_seconds: 5
+
 # =============================================================================
 # Redis Configuration
 # =============================================================================
@@ -155,39 +182,6 @@ mail:
   from: no-replay@oryon.com
 
 # =============================================================================
-# JWT (Authentication Token) Configuration
-# =============================================================================
-jwt:
-  access:
-    # Base64-encoded 64-byte secret key
-    # Generate with: openssl rand -base64 64
-    # MUST be rotated regularly in production
-    secret: "your-super-secret-64-byte-long-session-key-for-testing"
-    # Token issuer identifier
-    issuer: "api.oryon.com"
-
-    # Allowed audiences (comma-separated)
-    audiences: "WEB,MOBILE"
-
-    # Access token expiration time (minutes)
-    ttl: 15
-
-  refresh:
-    # Base64-encoded 64-byte secret key
-    # Generate with: openssl rand -base64 64
-    # MUST be rotated regularly in production
-    secret: "your-super-secret-64-byte-long-session-key-for-testing"
-
-    # Token issuer identifier
-    issuer: "api.oryon.com"
-
-    # Allowed audiences (comma-separated)
-    audiences: "WEB,MOBILE"
-
-    # Refresh token expiration time (days)
-    ttl: 7
-
-# =============================================================================
 # Hashing & Cryptography Configuration
 # =============================================================================
 hash:
@@ -214,34 +208,49 @@ modules:
     # Enable authentication module
     enabled: true
 
-    # MFA login code expiration (minutes)
-    mfa_login_ttl_minutes: 5
+    # Multi-Factor Authentication (MFA)
+    mfa:
+      # Base64-encoded 32-byte secret
+      # Generate with: openssl rand -base64 32
+      secret: "Gttpmh8mX3MJCgimbmYn1K4qshhY/JpEB2MSe4M85UY="
 
-    # MFA setup confirmation expiration (minutes)
-    mfa_setup_confirm_ttl_minutes: 3
+      totp:
+        # Issuer name shown in authenticator apps
+        issuer: "ORYON"
 
-    # Registration activation expiration (hours)
-    registration_ttl_hours: 3
+        # TOTP validity period (seconds)
+        period: 30
 
-    # Password reset token expiration (hours)
-    password_reset_ttl_hours: 3
+        # Allowed clock skew (number of steps)
+        skew: 1
 
-    # Refresh token expiration (days)
-    refresh_token_ttl_days: 7
+    # JWT (Authentication Token) Configuration
+    jwt:
+      access:
+        # Base64-encoded 64-byte secret key
+        # Generate with: openssl rand -base64 64
+        # MUST be rotated regularly in production
+        secret: "your-super-secret-64-byte-long-session-key-for-testing"
+        # Token issuer identifier
+        issuer: "api.oryon.com"
 
-    # Avatar upload configuration
-    # avatar_bucket: storage bucket name used for avatar files
-    # avatar_base_url: base URL for serving avatars (should already include bucket path if needed)
-    # avatar_max_size_bytes: maximum allowed upload size in bytes
-    avatar_bucket: "oryon-assets"
-    avatar_base_url: "https://cdn.example.com"
-    avatar_max_size_bytes: 2621440 # 2.5MB
+        # Allowed audiences (comma-separated)
+        audiences: "WEB,MOBILE"
 
-  notification:
-    # Enable notification module
-    enabled: true
+        # Access token expiration time (minutes)
+        ttl: 15
 
-    # Messaging consumer identifiers
-    consumer_names: >
-      user_registration_notification,
-      user_forgot_password_notification
+      refresh:
+        # Base64-encoded 64-byte secret key
+        # Generate with: openssl rand -base64 64
+        # MUST be rotated regularly in production
+        secret: "your-super-secret-64-byte-long-session-key-for-testing"
+
+        # Token issuer identifier
+        issuer: "api.oryon.com"
+
+        # Allowed audiences (comma-separated)
+        audiences: "WEB,MOBILE"
+
+        # Refresh token expiration time (days)
+        ttl: 7

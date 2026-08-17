@@ -7,6 +7,7 @@ import (
 	"github.com/qarven/oryon-go/internal/identity/domain"
 	"github.com/qarven/oryon-go/internal/pkg/clock"
 	"github.com/qarven/oryon-go/internal/pkg/config"
+	"github.com/qarven/oryon-go/internal/pkg/encryption"
 	"github.com/qarven/oryon-go/internal/pkg/goerror"
 	"github.com/qarven/oryon-go/internal/pkg/goroutine"
 	"github.com/qarven/oryon-go/internal/pkg/hash"
@@ -21,7 +22,7 @@ type Repository interface {
 
 	GetIdentityCredentialByIdentityID(ctx context.Context, identityID int64, credType domain.IdentityCredentialType) (*domain.IdentityCredential, error)
 
-	ListIdentities(ctx context.Context, arg domain.ListIdentitiesArgument) ([]domain.Identity, int64, error)
+	ListIdentities(ctx context.Context, arg ListIdentitiesFilter) ([]domain.Identity, int64, error)
 }
 
 type CacheRepository interface {
@@ -37,6 +38,7 @@ type Dependency struct {
 	Validator       validator.Validator
 	Config          config.Config
 	Argon2ID        hash.Hash
+	MfaEncryption   encryption.Encryption
 	UID             uid.NumberID
 	UUID            uid.StringID
 	Clock           clock.Clocker
@@ -47,34 +49,36 @@ type Dependency struct {
 }
 
 type Application struct {
-	repo       Repository
-	cache      CacheRepository
-	validator  validator.Validator
-	config     config.Config
-	argon2id   hash.Hash
-	uid        uid.NumberID
-	uuid       uid.StringID
-	clock      clock.Clocker
-	accessJWT  jwt.JWT
-	refreshJWT jwt.JWT
-	ins        instrument.Instrumentation
-	goroutine  *goroutine.Manager
+	repo          Repository
+	cache         CacheRepository
+	validator     validator.Validator
+	config        config.Config
+	argon2id      hash.Hash
+	mfaEncryption encryption.Encryption
+	uid           uid.NumberID
+	uuid          uid.StringID
+	clock         clock.Clocker
+	accessJWT     jwt.JWT
+	refreshJWT    jwt.JWT
+	ins           instrument.Instrumentation
+	goroutine     *goroutine.Manager
 }
 
 func New(dep Dependency) *Application {
 	return &Application{
-		repo:       dep.Repository,
-		cache:      dep.CacheRepository,
-		validator:  dep.Validator,
-		argon2id:   dep.Argon2ID,
-		config:     dep.Config,
-		uid:        dep.UID,
-		uuid:       dep.UUID,
-		clock:      dep.Clock,
-		accessJWT:  dep.AccessJWT,
-		refreshJWT: dep.RefreshJWT,
-		ins:        dep.Instrument,
-		goroutine:  dep.Goroutine,
+		repo:          dep.Repository,
+		cache:         dep.CacheRepository,
+		validator:     dep.Validator,
+		argon2id:      dep.Argon2ID,
+		mfaEncryption: dep.MfaEncryption,
+		config:        dep.Config,
+		uid:           dep.UID,
+		uuid:          dep.UUID,
+		clock:         dep.Clock,
+		accessJWT:     dep.AccessJWT,
+		refreshJWT:    dep.RefreshJWT,
+		ins:           dep.Instrument,
+		goroutine:     dep.Goroutine,
 	}
 }
 

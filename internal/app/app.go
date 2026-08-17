@@ -11,7 +11,6 @@ import (
 	"github.com/qarven/oryon-go/internal/pkg/goroutine"
 	"github.com/qarven/oryon-go/internal/pkg/hash"
 	"github.com/qarven/oryon-go/internal/pkg/instrument"
-	"github.com/qarven/oryon-go/internal/pkg/jwt"
 	"github.com/qarven/oryon-go/internal/pkg/mail"
 	"github.com/qarven/oryon-go/internal/pkg/uid"
 	"github.com/qarven/oryon-go/internal/pkg/validator"
@@ -29,16 +28,14 @@ type App struct {
 	ins    instrument.Instrumentation
 
 	// libraries
-	goroutine  *goroutine.Manager
-	validator  validator.Validator
-	clock      clock.Clocker
-	hmac       hash.Hash
-	argon2id   hash.Hash
-	bcrypt     hash.Hash
-	uuid       uid.StringID
-	uid        uid.NumberID
-	accessJWT  jwt.JWT
-	refreshJWT jwt.JWT
+	goroutine *goroutine.Manager
+	validator validator.Validator
+	clock     clock.Clocker
+	hmac      hash.Hash
+	argon2id  hash.Hash
+	bcrypt    hash.Hash
+	uuid      uid.StringID
+	uid       uid.NumberID
 
 	// resources
 	dbConn    *pgxpool.Pool
@@ -68,7 +65,6 @@ func New() *App {
 	app.initConfig()
 	app.initInstrument()
 	app.initLibraries()
-	app.initJWT()
 	app.initDatabase()
 	app.initCache()
 	app.initMail()

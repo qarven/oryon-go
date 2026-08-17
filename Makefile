@@ -3,7 +3,7 @@
 -include .env
 export
 
-.PHONY: help restart run test test-race test-integration lint migrate-up migrate-down seed-up seed-down compose-up compose-down gen-sql gen-api
+.PHONY: help restart run test test-race test-integration lint migrate-up migrate-down migrate-fix seed-up seed-down seed-fix compose-up compose-down gen-sql gen-api
 
 ## meta: Show available make targets.
 help:
@@ -66,6 +66,9 @@ migrate-up: ## Apply database migrations.
 migrate-down: ## Roll back the most recent migration.
 	@goose -dir database/migration postgres "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=disable" down
 
+migrate-fix: ## Apply sequential ordering to migrations.
+	@goose -dir database/migration fix
+
 ## ***** ***** ***** ***** ***** ***** ***** ***** ***** *****
 ## Seeder
 ## ***** ***** ***** ***** ***** ***** ***** ***** ***** *****
@@ -77,6 +80,8 @@ seed-up: ## Apply database seed scripts.
 seed-down: ## Roll back the most recent seed script.
 	@goose -dir database/seed -table "goose_seed_db_version" postgres "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=disable" down
 
+seed-fix: ## Apply sequential ordering to seeders.
+	@goose -dir database/migration fix
 
 ## ***** ***** ***** ***** ***** ***** ***** ***** ***** *****
 ## Podman

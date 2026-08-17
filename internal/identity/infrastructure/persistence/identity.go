@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/qarven/oryon-go/internal/identity/application"
 	"github.com/qarven/oryon-go/internal/identity/domain"
 	"github.com/qarven/oryon-go/internal/pkg/sqlc"
 )
@@ -35,7 +36,10 @@ func (p *Postgres) GetIdentityByEmail(ctx context.Context, email string) (*domai
 	return toIdentity(row.ID, row.Email, row.Name, row.Status), nil
 }
 
-func (p *Postgres) ListIdentities(ctx context.Context, arg domain.ListIdentitiesArgument) ([]domain.Identity, int64, error) {
+func (p *Postgres) ListIdentities(
+	ctx context.Context,
+	arg application.ListIdentitiesFilter,
+) ([]domain.Identity, int64, error) {
 	ctx, span := p.ins.Tracer("identity.infrastructure.persistence").Start(ctx, "ListIdentities")
 	defer span.End()
 

@@ -10,8 +10,11 @@ import (
 	"github.com/qarven/oryon-go/internal/pkg/sqlc"
 )
 
-func (p *Postgres) GetIdentityCredentialByIdentityID(ctx context.Context, identityID int64, credType domain.IdentityCredentialType) (
-	*domain.IdentityCredential, error) {
+func (p *Postgres) GetIdentityCredentialByIdentityID(
+	ctx context.Context,
+	identityID int64,
+	credType domain.IdentityCredentialType,
+) (*domain.IdentityCredential, error) {
 	ctx, span := p.ins.Tracer("identity.infrastructure.persistence").Start(ctx, "GetIdentityCredentialByIdentityID")
 	defer span.End()
 
@@ -31,7 +34,11 @@ func (p *Postgres) GetIdentityCredentialByIdentityID(ctx context.Context, identi
 	return toIdentityCredential(row.ID, row.IdentityID, row.Type, row.PasswordHash), nil
 }
 
-func toIdentityCredential(id, identityID int64, credentialType int16, passwordHash pgtype.Text) *domain.IdentityCredential {
+func toIdentityCredential(
+	id, identityID int64,
+	credentialType int16,
+	passwordHash pgtype.Text,
+) *domain.IdentityCredential {
 	out := &domain.IdentityCredential{
 		ID:           id,
 		IdentityID:   identityID,

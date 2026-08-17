@@ -11,13 +11,13 @@ import (
 	connectcors "connectrpc.com/cors"
 	"connectrpc.com/grpchealth"
 	"connectrpc.com/grpcreflect"
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/qarven/oryon-go/internal/pkg/clock"
 	"github.com/qarven/oryon-go/internal/pkg/config"
 	"github.com/qarven/oryon-go/internal/pkg/goroutine"
 	"github.com/qarven/oryon-go/internal/pkg/hash"
 	"github.com/qarven/oryon-go/internal/pkg/instrument"
-	"github.com/qarven/oryon-go/internal/pkg/jwt"
 	"github.com/qarven/oryon-go/internal/pkg/mail"
 	"github.com/qarven/oryon-go/internal/pkg/middleware"
 	"github.com/qarven/oryon-go/internal/pkg/uid"
@@ -97,35 +97,6 @@ func (a *App) initLibraries() {
 	a.uid = snow
 }
 
-func (a *App) initJWT() {
-	accessJWT, err := jwt.NewHS512(jwt.Config{
-		Secret:    []byte(a.config.GetString("jwt.access.secret")),
-		Issuer:    a.config.GetString("jwt.access.issuer"),
-		Audiences: a.config.GetArray("jwt.access.audiences"),
-		TTL:       a.config.GetMinute("jwt.access.ttl"),
-		Clock:     a.clock,
-	})
-	if err != nil {
-		slog.Error("failed to init jwt access token", "error", err)
-		os.Exit(1)
-	}
-
-	refreshJWT, err := jwt.NewHS512(jwt.Config{
-		Secret:    []byte(a.config.GetString("jwt.refresh.secret")),
-		Issuer:    a.config.GetString("jwt.refresh.issuer"),
-		Audiences: a.config.GetArray("jwt.refresh.audiences"),
-		TTL:       a.config.GetDay("jwt.refresh.ttl"),
-		Clock:     a.clock,
-	})
-	if err != nil {
-		slog.Error("failed to init jwt refresh token", "error", err)
-		os.Exit(1)
-	}
-
-	a.accessJWT = accessJWT
-	a.refreshJWT = refreshJWT
-}
-
 func (a *App) initDatabase() {
 	config, err := pgxpool.ParseConfig(a.config.GetString("database.url"))
 	if err != nil {
@@ -139,11 +110,15 @@ func (a *App) initDatabase() {
 	config.MaxConnIdleTime = a.config.GetSecond("database.pool.max_conn_idle_seconds")
 	config.HealthCheckPeriod = a.config.GetSecond("database.pool.health_check_period_seconds")
 
+	a.setupDBObservability(config)
+
 	pool, err := pgxpool.NewWithConfig(a.ctx, config)
 	if err != nil {
 		slog.Error("failed to create DB connection pool", "error", err)
 		os.Exit(1)
 	}
+
+	a.setupDBPoolStats(pool)
 
 	pingCtx, cancel := context.WithTimeout(a.ctx, pingTimeout)
 	err = pool.Ping(pingCtx)
@@ -156,6 +131,63 @@ func (a *App) initDatabase() {
 	}
 
 	a.dbConn = pool
+}
+
+func (a *App) setupDBObservability(cfg *pgxpool.Config) {
+	if !a.config.GetBool("database.observability.enabled") {
+		slog.Info("database observability disabled")
+		return
+	}
+
+	opts := []otelpgx.Option{
+		otelpgx.WithTracerProvider(a.ins.TracerProvider()),
+		otelpgx.WithMeterProvider(a.ins.MeterProvider()),
+	}
+
+	if a.config.GetBool("database.observability.trim_sql_span_name") {
+		opts = append(opts, otelpgx.WithTrimSQLInSpanName())
+	}
+
+	if a.config.GetBool("database.observability.disable_sql_statement") {
+		opts = append(opts, otelpgx.WithDisableSQLStatementInAttributes())
+	}
+
+	if a.config.GetBool("database.observability.disable_connection_details") {
+		opts = append(opts, otelpgx.WithDisableConnectionDetailsInAttributes())
+	}
+
+	if a.config.GetBool("database.observability.include_params") {
+		opts = append(opts, otelpgx.WithIncludeQueryParameters())
+	}
+
+	if a.config.GetBool("database.observability.disable_acquire_tracer") {
+		opts = append(opts, otelpgx.WithDisableAcquireTracer())
+	}
+
+	cfg.ConnConfig.Tracer = otelpgx.NewTracer(opts...)
+
+	slog.Info("database observability enabled")
+}
+
+func (a *App) setupDBPoolStats(pool *pgxpool.Pool) {
+	if !a.config.GetBool("database.observability.enabled") {
+		slog.Info("database pool stats disable")
+		return
+	}
+
+	interval := a.config.GetSecond("database.observability.pool_stats_interval_seconds")
+	statsOpts := []otelpgx.StatsOption{
+		otelpgx.WithStatsMeterProvider(a.ins.MeterProvider()),
+		otelpgx.WithMinimumReadDBStatsInterval(interval),
+	}
+
+	err := otelpgx.RecordStats(pool, statsOpts...)
+	if err != nil {
+		slog.Error("failed to record database stats", "error", err)
+		os.Exit(1)
+	}
+
+	slog.Info("database pool stats enabled", "interval", interval.String())
 }
 
 func (a *App) initCache() {
@@ -202,7 +234,7 @@ func (a *App) initMiddleware() {
 		middleware.NewMaintenanceInterceptor(a.config.GetArray("app.maintenance.endpoints")),
 		middleware.NewObservabilityInterceptor(), // outermost: sets the chain ID and logs every request
 		middleware.NewErrorInterceptor(),
-		middleware.NewAuthenticationInterceptor(a.accessJWT, a.config.GetArray("app.authentication.public_endpoints")),
+		// middleware.NewAuthenticationInterceptor(a.accessJWT, a.config.GetArray("app.authentication.public_endpoints")),
 	}
 }
 

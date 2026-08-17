@@ -20,13 +20,20 @@ type IdentitiesOutput struct {
 	Total      int64
 }
 
+type ListIdentitiesFilter struct {
+	Email  string
+	Name   string
+	Limit  int32
+	Offset int32
+}
+
 func (a *Application) Identities(ctx context.Context, input IdentitiesInput) (*IdentitiesOutput, error) {
 	ctx, span := a.ins.Tracer("identity.application").Start(ctx, "Identities")
 	defer span.End()
 
 	limit, offset := paginate.Normalize(input.Limit, input.Page)
 
-	identities, total, err := a.repo.ListIdentities(ctx, domain.ListIdentitiesArgument{
+	identities, total, err := a.repo.ListIdentities(ctx, ListIdentitiesFilter{
 		Email:  input.Email,
 		Name:   input.Name,
 		Limit:  limit,

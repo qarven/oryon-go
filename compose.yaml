@@ -1,0 +1,114 @@
+services:
+  # ===== ===== =====
+  # Database
+  # ===== ===== =====
+  postgres:
+    image: postgres:18-alpine
+    pull_policy: missing
+    shm_size: 128mb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_oryon_data:/var/lib/postgresql
+    networks:
+      - oryon-network
+    environment:
+      POSTGRES_PASSWORD: password
+      POSTGRES_USER: user
+      POSTGRES_DB: oryon
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --username=user --dbname=oryon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8.10-alpine
+    pull_policy: missing
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_oryon_data:/data
+    networks:
+      - oryon-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===== ===== =====
+  # Mailer
+  # ===== ===== =====
+  mailer:
+    image: axllent/mailpit:v1.28.0
+    pull_policy: missing
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025" # SMTP server
+      - "127.0.0.1:8025:8025" # Web UI
+    networks:
+      - oryon-network
+
+  # ===== ===== =====
+  # Observability (optional profile)
+  # ===== ===== =====
+  tempo:
+    image: grafana/tempo:2.9.0
+    pull_policy: missing
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./deploy/tempo.yaml:/etc/tempo.yaml
+    networks:
+      - oryon-network
+
+  prometheus:
+    image: prom/prometheus:v3.8.1
+    pull_policy: missing
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus.yaml"]
+    volumes:
+      - ./deploy/prometheus.yaml:/etc/prometheus.yaml
+    networks:
+      - oryon-network
+
+  loki:
+    image: grafana/loki:3.6.3
+    pull_policy: missing
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./deploy/loki.yaml:/etc/loki/loki.yaml
+      - loki_oryon_data:/loki
+    networks:
+      - oryon-network
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.142.0
+    pull_policy: missing
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector.yaml"]
+    volumes:
+      - ./deploy/otel-collector.yaml:/etc/otel-collector.yaml
+    ports:
+      - "127.0.0.1:4317:4317" # OTLP gRPC for host app
+      - "127.0.0.1:4318:4318" # OTLP HTTP for host app
+    networks:
+      - oryon-network
+    depends_on:
+      loki:
+        condition: service_started
+      tempo:
+        condition: service_started
+      prometheus:
+        condition: service_started
+
+volumes:
+  postgres_oryon_data:
+  redis_oryon_data:
+  loki_oryon_data:
+
+networks:
+  oryon-network:
+    driver: bridge

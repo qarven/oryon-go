@@ -1,0 +1,11 @@
+version: "2"
+
+sql:
+  - engine: "postgresql"
+    queries: "database/query"
+    schema: "database/migration"
+    gen:
+      go:
+        package: "sqlc"
+        out: "internal/pkg/sqlc"
+        sql_package: "pgx/v5"

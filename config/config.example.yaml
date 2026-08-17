@@ -1,0 +1,247 @@
+# =============================================================================
+# Global Application Settings
+# =============================================================================
+app:
+  # Timezone used across the application
+  tz: "Asia/Jakarta"
+
+  # Base URL of the frontend application
+  web: "http://localhost:3333"
+
+  # HTTP Server Configuration
+  server:
+    # Small service (256MB RAM, 0.5 CPU): 100-500
+    # Medium service (1GB RAM, 2 CPU): 1000-4000
+    # Large service (4GB RAM, 4 CPU): 4000-16000
+    max_goroutine: 1000
+
+    cors: "http://localhost:3330,http://localhost:3331,http://localhost:3332"
+
+    # Enable connect reflection
+    reflection: true
+
+    # Enable connect healthcheck
+    healthcheck: true
+
+    http:
+      # HTTP bind address and port
+      # 0.0.0.0 allows access from outside the container/host
+      address: "localhost:8000"
+      # HTTP server timeout settings (in seconds)
+      read_timeout_seconds: 5
+      read_header_timeout_seconds: 2
+      write_timeout_seconds: 10
+      idle_timeout_seconds: 30
+
+  # Maintenance Configuration
+  maintenance:
+    # Comma-separated list of connect procedures to block (exact match only).
+    endpoints: >
+      /oryon.identity.v1.AuthenticationService/Register,
+      /oryon.identity.v1.AuthenticationService/ResetPassword
+
+  # Authentication Configuration
+  authentication:
+    # Comma-separated list of connect procedures that skip authentication (exact match only).
+    public_endpoints: >
+      /oryon.identity.v1.AuthenticationService/Login,
+      /oryon.identity.v1.AuthenticationService/RefreshToken
+
+# =============================================================================
+# Cloudflare Settings
+# =============================================================================
+cloudflare:
+  turnstile:
+    site_verify_url: "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+    site_key: "3x00000000000000000000FF"
+    secret_key: "1x0000000000000000000000000000000AA"
+
+# =============================================================================
+# Observability / Instrumentation Configuration
+# =============================================================================
+instrument:
+  # Deployment/target environment label used to tag telemetry (e.g., resource attribute).
+  # Helps filter/group traces/metrics by environment.
+  # Expected values: local, dev, stg, prd
+  env: "local"
+
+  # OpenTelemetry "service.name" resource attribute.
+  # This is the primary identifier shown in most APM/trace UIs.
+  service_name: "oryon"
+
+  # OpenTelemetry "service.version" resource attribute.
+  # Typically the app release/version (e.g., git tag, semver like v1.2.3),
+  # or an environment tag while developing. Useful for comparing behavior across releases.
+  service_version: "dev"
+
+  # OTLP (OpenTelemetry Protocol) collector endpoint (host:port).
+  # Common defaults:
+  # - gRPC: 4317  (as used here)
+  # - HTTP: 4318  (if your exporter uses HTTP/proto or HTTP/json)
+  otlp_endpoint: "localhost:4317"
+
+  # Controls transport security for OTLP.
+  # false  = do not use TLS (plaintext). Common for local/dev.
+  # true = use TLS (recommended for staging/production).
+  otlp_secure: false
+
+  # Trace sampling ratio for head-based sampling.
+  # 1.0 = sample 100% of traces (high volume; good for local debugging)
+  # 0.1 = sample ~10% of traces (lower cost/noise)
+  # Typical production values depend on traffic and budget.
+  trace_sample_ratio: 1.0
+
+  # Metric export/collection interval in seconds.
+  # Smaller values = fresher metrics but more overhead/volume.
+  # Larger values = less overhead but coarser granularity.
+  metric_interval_seconds: 10
+
+  # List of sensitive fields to be masked in logs
+  # Any occurrence of these keys will be replaced with "***"
+  # Helps prevent credential leakage in logs
+  log_mask_fields: >
+    password,
+    new_password,
+    current_password,
+    access_token,
+    refresh_token,
+    authorization,
+    cookie,
+    challenge_token,
+    recovery_codes
+
+# =============================================================================
+# Database Configuration
+# =============================================================================
+database:
+  # Database connection URL
+  # Format:
+  # driver://user:password@host:port/database?query=string
+  url: "postgres://user:password@localhost:5432/oryon?sslmode=disable"
+  # Connection pool tuning (0 = driver default)
+  pool:
+    max_conns: 10
+    min_conns: 2
+    max_conn_lifetime_seconds: 1800
+    max_conn_idle_seconds: 300
+    health_check_period_seconds: 60
+
+# =============================================================================
+# Redis Configuration
+# =============================================================================
+redis:
+  # Redis connection URL
+  # Format:
+  # redis://[user]:[password]@[host]:[port]/[db]
+  url: "redis://localhost:6379/1"
+
+# =============================================================================
+# Mail (SMTP) Configuration
+# =============================================================================
+mail:
+  # SMTP server hostname
+  host: localhost
+
+  # SMTP server port
+  port: 1025
+
+  # SMTP authentication username
+  username: user
+
+  # SMTP authentication password
+  password: password
+
+  # Default "from" address for outgoing emails
+  from: no-replay@oryon.com
+
+# =============================================================================
+# JWT (Authentication Token) Configuration
+# =============================================================================
+jwt:
+  access:
+    # Base64-encoded 64-byte secret key
+    # Generate with: openssl rand -base64 64
+    # MUST be rotated regularly in production
+    secret: "your-super-secret-64-byte-long-session-key-for-testing"
+    # Token issuer identifier
+    issuer: "api.oryon.com"
+
+    # Allowed audiences (comma-separated)
+    audiences: "WEB,MOBILE"
+
+    # Access token expiration time (minutes)
+    ttl: 15
+
+  refresh:
+    # Base64-encoded 64-byte secret key
+    # Generate with: openssl rand -base64 64
+    # MUST be rotated regularly in production
+    secret: "your-super-secret-64-byte-long-session-key-for-testing"
+
+    # Token issuer identifier
+    issuer: "api.oryon.com"
+
+    # Allowed audiences (comma-separated)
+    audiences: "WEB,MOBILE"
+
+    # Refresh token expiration time (days)
+    ttl: 7
+
+# =============================================================================
+# Hashing & Cryptography Configuration
+# =============================================================================
+hash:
+  hmac:
+    # Secret key for HMAC signing
+    secret: "secret"
+
+  argon2id:
+    # Pepper added to password before hashing
+    pepper: "secret"
+
+  bcrypt:
+    # Cost factor (higher = slower & more secure)
+    cost: 12
+
+    # Pepper added to password before hashing
+    pepper: "secret"
+
+# =============================================================================
+# Feature Modules Configuration
+# =============================================================================
+modules:
+  identity:
+    # Enable authentication module
+    enabled: true
+
+    # MFA login code expiration (minutes)
+    mfa_login_ttl_minutes: 5
+
+    # MFA setup confirmation expiration (minutes)
+    mfa_setup_confirm_ttl_minutes: 3
+
+    # Registration activation expiration (hours)
+    registration_ttl_hours: 3
+
+    # Password reset token expiration (hours)
+    password_reset_ttl_hours: 3
+
+    # Refresh token expiration (days)
+    refresh_token_ttl_days: 7
+
+    # Avatar upload configuration
+    # avatar_bucket: storage bucket name used for avatar files
+    # avatar_base_url: base URL for serving avatars (should already include bucket path if needed)
+    # avatar_max_size_bytes: maximum allowed upload size in bytes
+    avatar_bucket: "oryon-assets"
+    avatar_base_url: "https://cdn.example.com"
+    avatar_max_size_bytes: 2621440 # 2.5MB
+
+  notification:
+    # Enable notification module
+    enabled: true
+
+    # Messaging consumer identifiers
+    consumer_names: >
+      user_registration_notification,
+      user_forgot_password_notification

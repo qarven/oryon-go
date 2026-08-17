@@ -1,0 +1,256 @@
+version: "2"
+# golangci configuration
+run:
+  # timeout for analysis, e.g. 30s, 5m, default is 1m
+  timeout: 5m
+  # include test files or not, default is true
+  tests: false
+  # by default isn't set. If set we pass it to "go list -mod={option}". From "go help modules":
+  # If invoked with -mod=readonly, the go command is disallowed from the implicit
+  # automatic updating of go.mod described above. Instead, it fails when any changes
+  # to go.mod are needed. This setting is most useful to check that go.mod does
+  # not need updates, such as in a continuous integration and testing system.
+  # If invoked with -mod=vendor, the go command assumes that the vendor
+  # directory holds the correct copies of dependencies and ignores
+  # the dependency descriptions in go.mod.
+  modules-download-mode: readonly
+  # Allow multiple parallel golangci-lint instances running.
+  # If false (default) - golangci-lint acquires file lock on start.
+  allow-parallel-runners: true
+
+# output configuration options
+output:
+  # colored-line-number|line-number|json|tab|checkstyle|code-climate, default is "colored-line-number"
+
+  formats:
+    tab:
+      path: stdout
+      print-linter-name: true
+      colors: true
+
+linters:
+  # please, do not use `enable-all`: it's deprecated and will be removed soon.
+  # inverted configuration with `enable-all` and `disable` is not scalable during updates of golangci-lint
+  default: standard
+  enable:
+    # level 0
+    - bidichk
+    - bodyclose
+    - errcheck
+    - errorlint
+    - exhaustive
+    - copyloopvar
+    - gosec
+    - govet
+    - nilerr
+    - nolintlint
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    # level 1
+    - asasalint
+    - cyclop
+    - durationcheck
+    - forcetypeassert
+    - gocognit
+    - gocyclo
+    - ineffassign
+    - makezero
+    - mirror
+    - noctx
+    - prealloc
+    - reassign
+    - unconvert
+    - unparam
+    - unused
+    - wastedassign
+    # level 2
+    # will be enabled on go v1.21 to use context.WithoutCancel()
+    - contextcheck
+    - dogsled
+    - dupl
+    - errchkjson
+    - forbidigo
+    - gochecknoglobals
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - godox
+    - err113
+    - gomodguard_v2
+    - revive
+    - usestdlibvars
+    # level 3
+    - errname
+    - gocheckcompilerdirectives
+    - gomoddirectives
+    - grouper
+    - importas
+    - loggercheck
+    - nakedret
+    - nosprintfhostport
+    - paralleltest
+    - thelper
+    - tparallel
+    # level 4
+    - arangolint
+    - asciicheck
+    - canonicalheader
+    - clickhouselint
+    - containedctx
+    - decorder
+    - depguard
+    - dupword
+    - embeddedstructfieldcheck
+    # - exhaustruct
+    - exptostd
+    - fatcontext
+    - funcorder
+    - funlen
+    - ginkgolinter
+    - gochecksumtype
+    - godoclint
+    - godot
+    - goheader
+    - goprintffuncname
+    - gosmopolitan
+    - iface
+    - inamedparam
+    - interfacebloat
+    - intrange
+    - iotamixing
+    - ireturn
+    - lll
+    - maintidx
+    - misspell
+    - mnd
+    - modernize
+    - musttag
+    - nestif
+    - nilnesserr
+    - nilnil
+    - nlreturn
+    - noinlineerr
+    - nonamedreturns
+    - perfsprint
+    - predeclared
+    - promlinter
+    - protogetter
+    - recvcheck
+    - sloglint
+    - spancheck
+    - tagalign
+    - tagliatelle
+    - testableexamples
+    - testifylint
+    - testpackage
+    - unqueryvet
+    - usetesting
+    - varnamelen
+    - whitespace
+    # - wrapcheck
+    - wsl_v5
+    - zerologlint
+
+  # all available settings of specific linters
+  settings:
+    cyclop:
+      # minimal code complexity to report, 30 by default (but we recommend 10-20)
+      max-complexity: 20
+
+    depguard:
+      rules:
+        main:
+          files:
+            - "!**/vendor/**"
+          deny:
+            - pkg: github.com/pkg/errors
+              desc: use stdlib errors instead
+            - pkg: github.com/golang/protobuf
+              desc: use google.golang.org/protobuf instead
+
+    errcheck:
+      # report about not checking of errors in type assertions: `a := b.(MyStruct)`;
+      # default is false: such cases aren't reported by default.
+      check-type-assertions: true
+
+      # report about assignment of errors to blank identifier: `num, _ := strconv.Atoi(numStr)`;
+      # default is false: such cases aren't reported by default.
+      check-blank: true
+
+    exhaustive:
+      # indicates that switch statements are to be considered exhaustive if a
+      # 'default' case is present, even if all enum members aren't listed in the
+      # switch
+      default-signifies-exhaustive: true
+
+    gocognit:
+      # minimal code complexity to report, 30 by default (but we recommend 10-20)
+      min-complexity: 20
+
+    gocyclo:
+      # minimal code complexity to report, 30 by default (but we recommend 10-20)
+      min-complexity: 20
+
+    ireturn:
+      allow:
+        - error
+        - empty
+        - stdlib
+        - go.opentelemetry.io/otel/trace.Tracer
+        - go.opentelemetry.io/otel/metric.Meter
+        - github.com/qarven/oryon-go/internal/pkg/instrument.Instrumentation
+
+    mnd:
+      checks:
+        - argument
+        - case
+        - condition
+        - operation
+        - return
+      ignored-numbers:
+        - "0"
+        - "1"
+        - "2"
+        - "10"
+        - "100"
+        - "1000"
+
+    # wrapcheck:
+    #   ignore-interface-regexps:
+    #     - "slog.Handler"
+    #     - "context.Context"
+    #   ignore-package-globs:
+    #     - "log/slog"
+    #     - "context"
+
+    revive:
+      enable-all-rules: false
+      rules:
+        - name: exported
+          disabled: true
+
+    nolintlint:
+      # Enable to require an explanation of nonzero length after each nolint directive. Default is false.
+      require-explanation: true
+      # Enable to require nolint directives to mention the specific linter being suppressed. Default is false.
+      require-specific: true
+
+    gosec:
+      excludes:
+        - G115
+
+    rowserrcheck:
+      packages:
+        - github.com/jmoiron/sqlx
+
+    tagliatelle:
+      # Check the struck tag name case.
+      case:
+        # Use the struct field name to check the name of the struct tag.
+        # Default: false
+        use-field-name: false
+        rules:
+          # Any struct tag type can be used.
+          # Support string case: `camel`, `pascal`, `kebab`, `snake`, `upperSnake`, `goCamel`, `goPascal`, `goKebab`, `goSnake`, `upper`, `lower`, `header`.
+          json: snake

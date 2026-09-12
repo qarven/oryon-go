@@ -52,7 +52,6 @@ func (s *Symmetric) Issue(jti string, claim Claims) (string, error) {
 		NotBefore: libJWT.NewNumericDate(now),
 		ExpiresAt: libJWT.NewNumericDate(now.Add(s.ttl)),
 		UserID:    claim.UserID,
-		UserEmail: claim.UserEmail,
 	})
 
 	signed, err := token.SignedString(s.secret)

@@ -7,54 +7,33 @@ package sqlc
 
 import (
 	"context"
-	"net/netip"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const clearPrimaryEmails = `-- name: ClearPrimaryEmails :exec
-UPDATE user_emails SET is_primary = false WHERE user_id = $1 AND deleted_at IS NULL
+const consumeSiblingChallenges = `-- name: ConsumeSiblingChallenges :exec
+UPDATE verification_challenges SET consumed_at = $1
+WHERE identifier = $2
+  AND purpose = $3
+  AND consumed_at IS NULL
+  AND id != $4
 `
 
-func (q *Queries) ClearPrimaryEmails(ctx context.Context, userID int64) error {
-	_, err := q.db.Exec(ctx, clearPrimaryEmails, userID)
-	return err
-}
-
-const consumeVerificationChallenge = `-- name: ConsumeVerificationChallenge :exec
-UPDATE verification_challenges SET consumed_at = $1 WHERE id = $2 AND consumed_at IS NULL
-`
-
-type ConsumeVerificationChallengeParams struct {
+type ConsumeSiblingChallengesParams struct {
 	ConsumedAt pgtype.Timestamptz
-	ID         int64
+	Identifier string
+	Purpose    int16
+	ExceptID   int64
 }
 
-func (q *Queries) ConsumeVerificationChallenge(ctx context.Context, arg ConsumeVerificationChallengeParams) error {
-	_, err := q.db.Exec(ctx, consumeVerificationChallenge, arg.ConsumedAt, arg.ID)
+func (q *Queries) ConsumeSiblingChallenges(ctx context.Context, arg ConsumeSiblingChallengesParams) error {
+	_, err := q.db.Exec(ctx, consumeSiblingChallenges,
+		arg.ConsumedAt,
+		arg.Identifier,
+		arg.Purpose,
+		arg.ExceptID,
+	)
 	return err
-}
-
-const countUnusedBackupCodes = `-- name: CountUnusedBackupCodes :one
-SELECT COUNT(*) FROM backup_codes WHERE user_id = $1 AND used_at IS NULL
-`
-
-func (q *Queries) CountUnusedBackupCodes(ctx context.Context, userID int64) (int64, error) {
-	row := q.db.QueryRow(ctx, countUnusedBackupCodes, userID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countUserEmails = `-- name: CountUserEmails :one
-SELECT COUNT(*) FROM user_emails WHERE user_id = $1 AND deleted_at IS NULL
-`
-
-func (q *Queries) CountUserEmails(ctx context.Context, userID int64) (int64, error) {
-	row := q.db.QueryRow(ctx, countUserEmails, userID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
 }
 
 const createAuthFlow = `-- name: CreateAuthFlow :exec
@@ -67,7 +46,7 @@ type CreateAuthFlowParams struct {
 	UserID      pgtype.Int8
 	FlowType    int16
 	FlowState   int16
-	IpAddress   *netip.Addr
+	IpAddress   pgtype.Text
 	UserAgent   pgtype.Text
 	Context     []byte
 	CreatedAt   pgtype.Timestamptz
@@ -87,128 +66,6 @@ func (q *Queries) CreateAuthFlow(ctx context.Context, arg CreateAuthFlowParams) 
 		arg.CreatedAt,
 		arg.ExpiresAt,
 		arg.CompletedAt,
-	)
-	return err
-}
-
-const createBackupCode = `-- name: CreateBackupCode :exec
-INSERT INTO backup_codes (id, user_id, code, used_at, created_at)
-VALUES ($1, $2, $3, $4, $5)
-`
-
-type CreateBackupCodeParams struct {
-	ID        int64
-	UserID    int64
-	Code      []byte
-	UsedAt    pgtype.Timestamptz
-	CreatedAt pgtype.Timestamptz
-}
-
-func (q *Queries) CreateBackupCode(ctx context.Context, arg CreateBackupCodeParams) error {
-	_, err := q.db.Exec(ctx, createBackupCode,
-		arg.ID,
-		arg.UserID,
-		arg.Code,
-		arg.UsedAt,
-		arg.CreatedAt,
-	)
-	return err
-}
-
-const createIdentity = `-- name: CreateIdentity :exec
-INSERT INTO identities (id, user_id, provider, provider_subject, created_at, last_used_at, revoked_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-`
-
-type CreateIdentityParams struct {
-	ID              int64
-	UserID          int64
-	Provider        int16
-	ProviderSubject string
-	CreatedAt       pgtype.Timestamptz
-	LastUsedAt      pgtype.Timestamptz
-	RevokedAt       pgtype.Timestamptz
-}
-
-func (q *Queries) CreateIdentity(ctx context.Context, arg CreateIdentityParams) error {
-	_, err := q.db.Exec(ctx, createIdentity,
-		arg.ID,
-		arg.UserID,
-		arg.Provider,
-		arg.ProviderSubject,
-		arg.CreatedAt,
-		arg.LastUsedAt,
-		arg.RevokedAt,
-	)
-	return err
-}
-
-const createMfaFactor = `-- name: CreateMfaFactor :exec
-INSERT INTO mfa_factors (id, user_id, type, name, created_at, verified_at, last_used_at, revoked_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-`
-
-type CreateMfaFactorParams struct {
-	ID         int64
-	UserID     int64
-	Type       int16
-	Name       string
-	CreatedAt  pgtype.Timestamptz
-	VerifiedAt pgtype.Timestamptz
-	LastUsedAt pgtype.Timestamptz
-	RevokedAt  pgtype.Timestamptz
-}
-
-func (q *Queries) CreateMfaFactor(ctx context.Context, arg CreateMfaFactorParams) error {
-	_, err := q.db.Exec(ctx, createMfaFactor,
-		arg.ID,
-		arg.UserID,
-		arg.Type,
-		arg.Name,
-		arg.CreatedAt,
-		arg.VerifiedAt,
-		arg.LastUsedAt,
-		arg.RevokedAt,
-	)
-	return err
-}
-
-const createPasskey = `-- name: CreatePasskey :exec
-INSERT INTO passkeys (id, user_id, credential_id, public_key, sign_count, name, aaguid, transports, device_type, backed_up, created_at, last_used_at, revoked_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-`
-
-type CreatePasskeyParams struct {
-	ID           int64
-	UserID       int64
-	CredentialID []byte
-	PublicKey    []byte
-	SignCount    int64
-	Name         string
-	Aaguid       pgtype.Text
-	Transports   []string
-	DeviceType   pgtype.Text
-	BackedUp     bool
-	CreatedAt    pgtype.Timestamptz
-	LastUsedAt   pgtype.Timestamptz
-	RevokedAt    pgtype.Timestamptz
-}
-
-func (q *Queries) CreatePasskey(ctx context.Context, arg CreatePasskeyParams) error {
-	_, err := q.db.Exec(ctx, createPasskey,
-		arg.ID,
-		arg.UserID,
-		arg.CredentialID,
-		arg.PublicKey,
-		arg.SignCount,
-		arg.Name,
-		arg.Aaguid,
-		arg.Transports,
-		arg.DeviceType,
-		arg.BackedUp,
-		arg.CreatedAt,
-		arg.LastUsedAt,
-		arg.RevokedAt,
 	)
 	return err
 }
@@ -238,19 +95,17 @@ func (q *Queries) CreatePasswordCredential(ctx context.Context, arg CreatePasswo
 }
 
 const createRefreshToken = `-- name: CreateRefreshToken :exec
-INSERT INTO refresh_tokens (id, session_id, token, issued_at, expires_at, revoked_at, replaced_by, created_ip)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO refresh_tokens (id, session_id, token, issued_at, expires_at, created_ip)
+VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type CreateRefreshTokenParams struct {
-	ID         int64
-	SessionID  int64
-	Token      []byte
-	IssuedAt   pgtype.Timestamptz
-	ExpiresAt  pgtype.Timestamptz
-	RevokedAt  pgtype.Timestamptz
-	ReplacedBy pgtype.Int8
-	CreatedIp  *netip.Addr
+	ID        int64
+	SessionID int64
+	Token     []byte
+	IssuedAt  pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
+	CreatedIp pgtype.Text
 }
 
 func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) error {
@@ -260,8 +115,6 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 		arg.Token,
 		arg.IssuedAt,
 		arg.ExpiresAt,
-		arg.RevokedAt,
-		arg.ReplacedBy,
 		arg.CreatedIp,
 	)
 	return err
@@ -276,7 +129,7 @@ type CreateSecurityEventParams struct {
 	ID        int64
 	UserID    pgtype.Int8
 	EventType string
-	IpAddress *netip.Addr
+	IpAddress pgtype.Text
 	UserAgent pgtype.Text
 	Metadata  []byte
 	CreatedAt pgtype.Timestamptz
@@ -296,8 +149,8 @@ func (q *Queries) CreateSecurityEvent(ctx context.Context, arg CreateSecurityEve
 }
 
 const createSession = `-- name: CreateSession :exec
-INSERT INTO sessions (id, user_id, token, created_at, expires_at, last_seen_at, revoked_at, ip_address, user_agent, mfa_verified_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO sessions (id, user_id, token, created_at, expires_at, last_seen_at, ip_address, user_agent, mfa_verified_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type CreateSessionParams struct {
@@ -307,8 +160,7 @@ type CreateSessionParams struct {
 	CreatedAt     pgtype.Timestamptz
 	ExpiresAt     pgtype.Timestamptz
 	LastSeenAt    pgtype.Timestamptz
-	RevokedAt     pgtype.Timestamptz
-	IpAddress     *netip.Addr
+	IpAddress     pgtype.Text
 	UserAgent     pgtype.Text
 	MfaVerifiedAt pgtype.Timestamptz
 }
@@ -321,36 +173,9 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 		arg.CreatedAt,
 		arg.ExpiresAt,
 		arg.LastSeenAt,
-		arg.RevokedAt,
 		arg.IpAddress,
 		arg.UserAgent,
 		arg.MfaVerifiedAt,
-	)
-	return err
-}
-
-const createTotpFactor = `-- name: CreateTotpFactor :exec
-INSERT INTO totp_factors (factor_id, secret, algorithm, digits, period, created_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-`
-
-type CreateTotpFactorParams struct {
-	FactorID  int64
-	Secret    []byte
-	Algorithm int16
-	Digits    int16
-	Period    int16
-	CreatedAt pgtype.Timestamptz
-}
-
-func (q *Queries) CreateTotpFactor(ctx context.Context, arg CreateTotpFactorParams) error {
-	_, err := q.db.Exec(ctx, createTotpFactor,
-		arg.FactorID,
-		arg.Secret,
-		arg.Algorithm,
-		arg.Digits,
-		arg.Period,
-		arg.CreatedAt,
 	)
 	return err
 }
@@ -451,7 +276,7 @@ type CreateVerificationChallengeParams struct {
 	Code        []byte
 	Attempts    int16
 	MaxAttempts int16
-	IpAddress   *netip.Addr
+	IpAddress   pgtype.Text
 	ExpiresAt   pgtype.Timestamptz
 	ConsumedAt  pgtype.Timestamptz
 	CreatedAt   pgtype.Timestamptz
@@ -475,53 +300,29 @@ func (q *Queries) CreateVerificationChallenge(ctx context.Context, arg CreateVer
 	return err
 }
 
-const deleteBackupCodesByUserID = `-- name: DeleteBackupCodesByUserID :exec
-DELETE FROM backup_codes WHERE user_id = $1
+const deleteExpiredAuthFlows = `-- name: DeleteExpiredAuthFlows :exec
+DELETE FROM auth_flows WHERE expires_at < NOW() AND completed_at IS NULL
 `
 
-func (q *Queries) DeleteBackupCodesByUserID(ctx context.Context, userID int64) error {
-	_, err := q.db.Exec(ctx, deleteBackupCodesByUserID, userID)
+func (q *Queries) DeleteExpiredAuthFlows(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteExpiredAuthFlows)
 	return err
 }
 
-const deleteTotpFactor = `-- name: DeleteTotpFactor :exec
-DELETE FROM totp_factors WHERE factor_id = $1
+const deleteExpiredVerificationChallenges = `-- name: DeleteExpiredVerificationChallenges :exec
+DELETE FROM verification_challenges WHERE expires_at < NOW() AND consumed_at IS NULL
 `
 
-func (q *Queries) DeleteTotpFactor(ctx context.Context, factorID int64) error {
-	_, err := q.db.Exec(ctx, deleteTotpFactor, factorID)
+func (q *Queries) DeleteExpiredVerificationChallenges(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteExpiredVerificationChallenges)
 	return err
-}
-
-const findUnusedBackupCodeByHash = `-- name: FindUnusedBackupCodeByHash :one
-SELECT id, user_id, code, used_at, created_at
-FROM backup_codes
-WHERE user_id = $1 AND code = $2 AND used_at IS NULL
-LIMIT 1
-`
-
-type FindUnusedBackupCodeByHashParams struct {
-	UserID int64
-	Code   []byte
-}
-
-func (q *Queries) FindUnusedBackupCodeByHash(ctx context.Context, arg FindUnusedBackupCodeByHashParams) (BackupCode, error) {
-	row := q.db.QueryRow(ctx, findUnusedBackupCodeByHash, arg.UserID, arg.Code)
-	var i BackupCode
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Code,
-		&i.UsedAt,
-		&i.CreatedAt,
-	)
-	return i, err
 }
 
 const getAuthFlowByID = `-- name: GetAuthFlowByID :one
 SELECT id, user_id, flow_type, flow_state, ip_address, user_agent, context, created_at, expires_at, completed_at
 FROM auth_flows
 WHERE id = $1
+LIMIT 1
 `
 
 func (q *Queries) GetAuthFlowByID(ctx context.Context, id int64) (AuthFlow, error) {
@@ -542,146 +343,11 @@ func (q *Queries) GetAuthFlowByID(ctx context.Context, id int64) (AuthFlow, erro
 	return i, err
 }
 
-const getBackupCodesForVerification = `-- name: GetBackupCodesForVerification :many
-SELECT id, user_id, code, used_at, created_at
-FROM backup_codes
-WHERE user_id = $1 AND used_at IS NULL
-`
-
-func (q *Queries) GetBackupCodesForVerification(ctx context.Context, userID int64) ([]BackupCode, error) {
-	rows, err := q.db.Query(ctx, getBackupCodesForVerification, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []BackupCode
-	for rows.Next() {
-		var i BackupCode
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Code,
-			&i.UsedAt,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getIdentityByProviderSubject = `-- name: GetIdentityByProviderSubject :one
-SELECT id, user_id, provider, provider_subject, created_at, last_used_at, revoked_at
-FROM identities
-WHERE provider = $1 AND provider_subject = $2 AND revoked_at IS NULL
-LIMIT 1
-`
-
-type GetIdentityByProviderSubjectParams struct {
-	Provider        int16
-	ProviderSubject string
-}
-
-func (q *Queries) GetIdentityByProviderSubject(ctx context.Context, arg GetIdentityByProviderSubjectParams) (Identity, error) {
-	row := q.db.QueryRow(ctx, getIdentityByProviderSubject, arg.Provider, arg.ProviderSubject)
-	var i Identity
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Provider,
-		&i.ProviderSubject,
-		&i.CreatedAt,
-		&i.LastUsedAt,
-		&i.RevokedAt,
-	)
-	return i, err
-}
-
-const getMfaFactorByID = `-- name: GetMfaFactorByID :one
-SELECT id, user_id, type, name, created_at, verified_at, last_used_at, revoked_at
-FROM mfa_factors
-WHERE id = $1
-`
-
-func (q *Queries) GetMfaFactorByID(ctx context.Context, id int64) (MfaFactor, error) {
-	row := q.db.QueryRow(ctx, getMfaFactorByID, id)
-	var i MfaFactor
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Type,
-		&i.Name,
-		&i.CreatedAt,
-		&i.VerifiedAt,
-		&i.LastUsedAt,
-		&i.RevokedAt,
-	)
-	return i, err
-}
-
-const getPasskeyByCredentialID = `-- name: GetPasskeyByCredentialID :one
-SELECT id, user_id, credential_id, public_key, sign_count, name, aaguid, transports, device_type, backed_up, created_at, last_used_at, revoked_at
-FROM passkeys
-WHERE credential_id = $1 AND revoked_at IS NULL
-LIMIT 1
-`
-
-func (q *Queries) GetPasskeyByCredentialID(ctx context.Context, credentialID []byte) (Passkey, error) {
-	row := q.db.QueryRow(ctx, getPasskeyByCredentialID, credentialID)
-	var i Passkey
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.CredentialID,
-		&i.PublicKey,
-		&i.SignCount,
-		&i.Name,
-		&i.Aaguid,
-		&i.Transports,
-		&i.DeviceType,
-		&i.BackedUp,
-		&i.CreatedAt,
-		&i.LastUsedAt,
-		&i.RevokedAt,
-	)
-	return i, err
-}
-
-const getPasskeyByID = `-- name: GetPasskeyByID :one
-SELECT id, user_id, credential_id, public_key, sign_count, name, aaguid, transports, device_type, backed_up, created_at, last_used_at, revoked_at
-FROM passkeys
-WHERE id = $1
-`
-
-func (q *Queries) GetPasskeyByID(ctx context.Context, id int64) (Passkey, error) {
-	row := q.db.QueryRow(ctx, getPasskeyByID, id)
-	var i Passkey
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.CredentialID,
-		&i.PublicKey,
-		&i.SignCount,
-		&i.Name,
-		&i.Aaguid,
-		&i.Transports,
-		&i.DeviceType,
-		&i.BackedUp,
-		&i.CreatedAt,
-		&i.LastUsedAt,
-		&i.RevokedAt,
-	)
-	return i, err
-}
-
 const getPasswordCredentialByUserID = `-- name: GetPasswordCredentialByUserID :one
 SELECT user_id, password, password_changed_at, created_at, updated_at
 FROM password_credentials
 WHERE user_id = $1
+LIMIT 1
 `
 
 func (q *Queries) GetPasswordCredentialByUserID(ctx context.Context, userID int64) (PasswordCredential, error) {
@@ -742,32 +408,11 @@ func (q *Queries) GetRefreshTokenByHash(ctx context.Context, token []byte) (Refr
 	return i, err
 }
 
-const getRefreshTokenByID = `-- name: GetRefreshTokenByID :one
-SELECT id, session_id, token, issued_at, expires_at, revoked_at, replaced_by, created_ip
-FROM refresh_tokens
-WHERE id = $1
-`
-
-func (q *Queries) GetRefreshTokenByID(ctx context.Context, id int64) (RefreshToken, error) {
-	row := q.db.QueryRow(ctx, getRefreshTokenByID, id)
-	var i RefreshToken
-	err := row.Scan(
-		&i.ID,
-		&i.SessionID,
-		&i.Token,
-		&i.IssuedAt,
-		&i.ExpiresAt,
-		&i.RevokedAt,
-		&i.ReplacedBy,
-		&i.CreatedIp,
-	)
-	return i, err
-}
-
 const getSessionByID = `-- name: GetSessionByID :one
 SELECT id, user_id, token, created_at, expires_at, last_seen_at, revoked_at, ip_address, user_agent, mfa_verified_at
 FROM sessions
 WHERE id = $1
+LIMIT 1
 `
 
 func (q *Queries) GetSessionByID(ctx context.Context, id int64) (Session, error) {
@@ -788,35 +433,11 @@ func (q *Queries) GetSessionByID(ctx context.Context, id int64) (Session, error)
 	return i, err
 }
 
-const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one
-SELECT id, user_id, token, created_at, expires_at, last_seen_at, revoked_at, ip_address, user_agent, mfa_verified_at
-FROM sessions
-WHERE token = $1
-LIMIT 1
-`
-
-func (q *Queries) GetSessionByTokenHash(ctx context.Context, token []byte) (Session, error) {
-	row := q.db.QueryRow(ctx, getSessionByTokenHash, token)
-	var i Session
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Token,
-		&i.CreatedAt,
-		&i.ExpiresAt,
-		&i.LastSeenAt,
-		&i.RevokedAt,
-		&i.IpAddress,
-		&i.UserAgent,
-		&i.MfaVerifiedAt,
-	)
-	return i, err
-}
-
 const getTotpFactorByFactorID = `-- name: GetTotpFactorByFactorID :one
 SELECT factor_id, secret, algorithm, digits, period, created_at
 FROM totp_factors
 WHERE factor_id = $1
+LIMIT 1
 `
 
 func (q *Queries) GetTotpFactorByFactorID(ctx context.Context, factorID int64) (TotpFactor, error) {
@@ -834,9 +455,10 @@ func (q *Queries) GetTotpFactorByFactorID(ctx context.Context, factorID int64) (
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, status, name, avatar_url, created_at, updated_at, deleted_at
+SELECT id, status, name, username, avatar_url, created_at, updated_at, deleted_at
 FROM users
 WHERE id = $1
+LIMIT 1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -846,6 +468,30 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.ID,
 		&i.Status,
 		&i.Name,
+		&i.Username,
+		&i.AvatarUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getUserByUsername = `-- name: GetUserByUsername :one
+SELECT id, status, name, username, avatar_url, created_at, updated_at, deleted_at
+FROM users
+WHERE username = $1
+LIMIT 1
+`
+
+func (q *Queries) GetUserByUsername(ctx context.Context, username pgtype.Text) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByUsername, username)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.Name,
+		&i.Username,
 		&i.AvatarUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -876,47 +522,6 @@ func (q *Queries) GetUserEmailByEmail(ctx context.Context, email string) (UserEm
 	return i, err
 }
 
-const getUserEmailByID = `-- name: GetUserEmailByID :one
-SELECT id, user_id, email, is_primary, created_at, verified_at, deleted_at
-FROM user_emails
-WHERE id = $1
-`
-
-func (q *Queries) GetUserEmailByID(ctx context.Context, id int64) (UserEmail, error) {
-	row := q.db.QueryRow(ctx, getUserEmailByID, id)
-	var i UserEmail
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Email,
-		&i.IsPrimary,
-		&i.CreatedAt,
-		&i.VerifiedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
-const getUserPhoneByID = `-- name: GetUserPhoneByID :one
-SELECT id, user_id, phone, created_at, verified_at, deleted_at
-FROM user_phone_numbers
-WHERE id = $1
-`
-
-func (q *Queries) GetUserPhoneByID(ctx context.Context, id int64) (UserPhoneNumber, error) {
-	row := q.db.QueryRow(ctx, getUserPhoneByID, id)
-	var i UserPhoneNumber
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Phone,
-		&i.CreatedAt,
-		&i.VerifiedAt,
-		&i.DeletedAt,
-	)
-	return i, err
-}
-
 const getUserPhoneByPhone = `-- name: GetUserPhoneByPhone :one
 SELECT id, user_id, phone, created_at, verified_at, deleted_at
 FROM user_phone_numbers
@@ -938,88 +543,11 @@ func (q *Queries) GetUserPhoneByPhone(ctx context.Context, phone string) (UserPh
 	return i, err
 }
 
-const getVerificationByIdentifierPurpose = `-- name: GetVerificationByIdentifierPurpose :many
-SELECT id, user_id, flow_id, identifier, purpose, code, attempts, max_attempts, ip_address, expires_at, consumed_at, created_at
-FROM verification_challenges
-WHERE identifier = $1 AND purpose = $2 AND consumed_at IS NULL AND expires_at > NOW()
-ORDER BY created_at DESC
-`
-
-type GetVerificationByIdentifierPurposeParams struct {
-	Identifier string
-	Purpose    int16
-}
-
-func (q *Queries) GetVerificationByIdentifierPurpose(ctx context.Context, arg GetVerificationByIdentifierPurposeParams) ([]VerificationChallenge, error) {
-	rows, err := q.db.Query(ctx, getVerificationByIdentifierPurpose, arg.Identifier, arg.Purpose)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []VerificationChallenge
-	for rows.Next() {
-		var i VerificationChallenge
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.FlowID,
-			&i.Identifier,
-			&i.Purpose,
-			&i.Code,
-			&i.Attempts,
-			&i.MaxAttempts,
-			&i.IpAddress,
-			&i.ExpiresAt,
-			&i.ConsumedAt,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getVerificationChallengeByHash = `-- name: GetVerificationChallengeByHash :one
-SELECT id, user_id, flow_id, identifier, purpose, code, attempts, max_attempts, ip_address, expires_at, consumed_at, created_at
-FROM verification_challenges
-WHERE code = $1 AND purpose = $2 AND consumed_at IS NULL AND expires_at > NOW()
-ORDER BY created_at DESC
-LIMIT 1
-`
-
-type GetVerificationChallengeByHashParams struct {
-	Code    []byte
-	Purpose int16
-}
-
-func (q *Queries) GetVerificationChallengeByHash(ctx context.Context, arg GetVerificationChallengeByHashParams) (VerificationChallenge, error) {
-	row := q.db.QueryRow(ctx, getVerificationChallengeByHash, arg.Code, arg.Purpose)
-	var i VerificationChallenge
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.FlowID,
-		&i.Identifier,
-		&i.Purpose,
-		&i.Code,
-		&i.Attempts,
-		&i.MaxAttempts,
-		&i.IpAddress,
-		&i.ExpiresAt,
-		&i.ConsumedAt,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const getVerificationChallengeByID = `-- name: GetVerificationChallengeByID :one
 SELECT id, user_id, flow_id, identifier, purpose, code, attempts, max_attempts, ip_address, expires_at, consumed_at, created_at
 FROM verification_challenges
 WHERE id = $1
+LIMIT 1
 `
 
 func (q *Queries) GetVerificationChallengeByID(ctx context.Context, id int64) (VerificationChallenge, error) {
@@ -1040,15 +568,6 @@ func (q *Queries) GetVerificationChallengeByID(ctx context.Context, id int64) (V
 		&i.CreatedAt,
 	)
 	return i, err
-}
-
-const incrementVerificationAttempts = `-- name: IncrementVerificationAttempts :exec
-UPDATE verification_challenges SET attempts = attempts + 1 WHERE id = $1
-`
-
-func (q *Queries) IncrementVerificationAttempts(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, incrementVerificationAttempts, id)
-	return err
 }
 
 const listBackupCodesByUserID = `-- name: ListBackupCodesByUserID :many
@@ -1073,41 +592,6 @@ func (q *Queries) ListBackupCodesByUserID(ctx context.Context, userID int64) ([]
 			&i.Code,
 			&i.UsedAt,
 			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listIdentitiesByUserID = `-- name: ListIdentitiesByUserID :many
-SELECT id, user_id, provider, provider_subject, created_at, last_used_at, revoked_at
-FROM identities
-WHERE user_id = $1 AND revoked_at IS NULL
-ORDER BY created_at
-`
-
-func (q *Queries) ListIdentitiesByUserID(ctx context.Context, userID int64) ([]Identity, error) {
-	rows, err := q.db.Query(ctx, listIdentitiesByUserID, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Identity
-	for rows.Next() {
-		var i Identity
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Provider,
-			&i.ProviderSubject,
-			&i.CreatedAt,
-			&i.LastUsedAt,
-			&i.RevokedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1191,254 +675,43 @@ func (q *Queries) ListMfaFactorsByUserIDActive(ctx context.Context, userID int64
 	return items, nil
 }
 
-const listPasskeysByUserID = `-- name: ListPasskeysByUserID :many
-SELECT id, user_id, credential_id, public_key, sign_count, name, aaguid, transports, device_type, backed_up, created_at, last_used_at, revoked_at
-FROM passkeys
-WHERE user_id = $1
-ORDER BY created_at
-`
-
-func (q *Queries) ListPasskeysByUserID(ctx context.Context, userID int64) ([]Passkey, error) {
-	rows, err := q.db.Query(ctx, listPasskeysByUserID, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Passkey
-	for rows.Next() {
-		var i Passkey
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.CredentialID,
-			&i.PublicKey,
-			&i.SignCount,
-			&i.Name,
-			&i.Aaguid,
-			&i.Transports,
-			&i.DeviceType,
-			&i.BackedUp,
-			&i.CreatedAt,
-			&i.LastUsedAt,
-			&i.RevokedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPasskeysByUserIDActive = `-- name: ListPasskeysByUserIDActive :many
-SELECT id, user_id, credential_id, public_key, sign_count, name, aaguid, transports, device_type, backed_up, created_at, last_used_at, revoked_at
-FROM passkeys
-WHERE user_id = $1 AND revoked_at IS NULL
-ORDER BY created_at
-`
-
-func (q *Queries) ListPasskeysByUserIDActive(ctx context.Context, userID int64) ([]Passkey, error) {
-	rows, err := q.db.Query(ctx, listPasskeysByUserIDActive, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Passkey
-	for rows.Next() {
-		var i Passkey
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.CredentialID,
-			&i.PublicKey,
-			&i.SignCount,
-			&i.Name,
-			&i.Aaguid,
-			&i.Transports,
-			&i.DeviceType,
-			&i.BackedUp,
-			&i.CreatedAt,
-			&i.LastUsedAt,
-			&i.RevokedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPhonesByUserID = `-- name: ListPhonesByUserID :many
-SELECT id, user_id, phone, created_at, verified_at, deleted_at
-FROM user_phone_numbers
-WHERE user_id = $1 AND deleted_at IS NULL
-ORDER BY created_at
-`
-
-func (q *Queries) ListPhonesByUserID(ctx context.Context, userID int64) ([]UserPhoneNumber, error) {
-	rows, err := q.db.Query(ctx, listPhonesByUserID, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []UserPhoneNumber
-	for rows.Next() {
-		var i UserPhoneNumber
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Phone,
-			&i.CreatedAt,
-			&i.VerifiedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSecurityEventsByUserID = `-- name: ListSecurityEventsByUserID :many
-SELECT id, user_id, event_type, ip_address, user_agent, metadata, created_at
-FROM security_events
-WHERE user_id = $1
+const listPendingVerificationChallengesByIdentifier = `-- name: ListPendingVerificationChallengesByIdentifier :many
+SELECT id, user_id, flow_id, identifier, purpose, code, attempts, max_attempts, ip_address, expires_at, consumed_at, created_at
+FROM verification_challenges
+WHERE identifier = $1
+  AND purpose = $2
+  AND consumed_at IS NULL
+  AND expires_at > NOW()
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListSecurityEventsByUserID(ctx context.Context, userID pgtype.Int8) ([]SecurityEvent, error) {
-	rows, err := q.db.Query(ctx, listSecurityEventsByUserID, userID)
+type ListPendingVerificationChallengesByIdentifierParams struct {
+	Identifier string
+	Purpose    int16
+}
+
+func (q *Queries) ListPendingVerificationChallengesByIdentifier(ctx context.Context, arg ListPendingVerificationChallengesByIdentifierParams) ([]VerificationChallenge, error) {
+	rows, err := q.db.Query(ctx, listPendingVerificationChallengesByIdentifier, arg.Identifier, arg.Purpose)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SecurityEvent
+	var items []VerificationChallenge
 	for rows.Next() {
-		var i SecurityEvent
+		var i VerificationChallenge
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
-			&i.EventType,
+			&i.FlowID,
+			&i.Identifier,
+			&i.Purpose,
+			&i.Code,
+			&i.Attempts,
+			&i.MaxAttempts,
 			&i.IpAddress,
-			&i.UserAgent,
-			&i.Metadata,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSessionsByUserIDAll = `-- name: ListSessionsByUserIDAll :many
-SELECT id, user_id, token, created_at, expires_at, last_seen_at, revoked_at, ip_address, user_agent, mfa_verified_at
-FROM sessions
-WHERE user_id = $1
-ORDER BY created_at DESC
-`
-
-func (q *Queries) ListSessionsByUserIDAll(ctx context.Context, userID int64) ([]Session, error) {
-	rows, err := q.db.Query(ctx, listSessionsByUserIDAll, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Session
-	for rows.Next() {
-		var i Session
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Token,
-			&i.CreatedAt,
 			&i.ExpiresAt,
-			&i.LastSeenAt,
-			&i.RevokedAt,
-			&i.IpAddress,
-			&i.UserAgent,
-			&i.MfaVerifiedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listUserEmailsByUserID = `-- name: ListUserEmailsByUserID :many
-SELECT id, user_id, email, is_primary, created_at, verified_at, deleted_at
-FROM user_emails
-WHERE user_id = $1 AND deleted_at IS NULL
-ORDER BY is_primary DESC, created_at
-`
-
-func (q *Queries) ListUserEmailsByUserID(ctx context.Context, userID int64) ([]UserEmail, error) {
-	rows, err := q.db.Query(ctx, listUserEmailsByUserID, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []UserEmail
-	for rows.Next() {
-		var i UserEmail
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Email,
-			&i.IsPrimary,
+			&i.ConsumedAt,
 			&i.CreatedAt,
-			&i.VerifiedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listUserEmailsByUserIDAll = `-- name: ListUserEmailsByUserIDAll :many
-SELECT id, user_id, email, is_primary, created_at, verified_at, deleted_at
-FROM user_emails
-WHERE user_id = $1
-ORDER BY is_primary DESC, created_at
-`
-
-func (q *Queries) ListUserEmailsByUserIDAll(ctx context.Context, userID int64) ([]UserEmail, error) {
-	rows, err := q.db.Query(ctx, listUserEmailsByUserIDAll, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []UserEmail
-	for rows.Next() {
-		var i UserEmail
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Email,
-			&i.IsPrimary,
-			&i.CreatedAt,
-			&i.VerifiedAt,
-			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1451,7 +724,7 @@ func (q *Queries) ListUserEmailsByUserIDAll(ctx context.Context, userID int64) (
 }
 
 const markBackupCodeUsed = `-- name: MarkBackupCodeUsed :exec
-UPDATE backup_codes SET used_at = $1 WHERE id = $2 AND used_at IS NULL
+UPDATE backup_codes SET used_at = $1 WHERE id = $2
 `
 
 type MarkBackupCodeUsedParams struct {
@@ -1464,175 +737,32 @@ func (q *Queries) MarkBackupCodeUsed(ctx context.Context, arg MarkBackupCodeUsed
 	return err
 }
 
-const revokeAllOtherSessions = `-- name: RevokeAllOtherSessions :exec
-UPDATE sessions SET revoked_at = $1 WHERE user_id = $2 AND id != $3 AND revoked_at IS NULL
-`
-
-type RevokeAllOtherSessionsParams struct {
-	RevokedAt pgtype.Timestamptz
-	UserID    int64
-	ID        int64
-}
-
-func (q *Queries) RevokeAllOtherSessions(ctx context.Context, arg RevokeAllOtherSessionsParams) error {
-	_, err := q.db.Exec(ctx, revokeAllOtherSessions, arg.RevokedAt, arg.UserID, arg.ID)
-	return err
-}
-
-const revokeIdentity = `-- name: RevokeIdentity :exec
-UPDATE identities SET revoked_at = $1 WHERE id = $2 AND revoked_at IS NULL
-`
-
-type RevokeIdentityParams struct {
-	RevokedAt pgtype.Timestamptz
-	ID        int64
-}
-
-func (q *Queries) RevokeIdentity(ctx context.Context, arg RevokeIdentityParams) error {
-	_, err := q.db.Exec(ctx, revokeIdentity, arg.RevokedAt, arg.ID)
-	return err
-}
-
-const revokeRefreshTokensBySessionID = `-- name: RevokeRefreshTokensBySessionID :exec
-UPDATE refresh_tokens SET revoked_at = $1 WHERE session_id = $2 AND revoked_at IS NULL
-`
-
-type RevokeRefreshTokensBySessionIDParams struct {
-	RevokedAt pgtype.Timestamptz
-	SessionID int64
-}
-
-func (q *Queries) RevokeRefreshTokensBySessionID(ctx context.Context, arg RevokeRefreshTokensBySessionIDParams) error {
-	_, err := q.db.Exec(ctx, revokeRefreshTokensBySessionID, arg.RevokedAt, arg.SessionID)
-	return err
-}
-
-const revokeSession = `-- name: RevokeSession :exec
-UPDATE sessions SET revoked_at = $1 WHERE id = $2 AND revoked_at IS NULL
-`
-
-type RevokeSessionParams struct {
-	RevokedAt pgtype.Timestamptz
-	ID        int64
-}
-
-func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) error {
-	_, err := q.db.Exec(ctx, revokeSession, arg.RevokedAt, arg.ID)
-	return err
-}
-
-const setPrimaryEmail = `-- name: SetPrimaryEmail :exec
-UPDATE user_emails SET is_primary = true WHERE id = $1
-`
-
-func (q *Queries) SetPrimaryEmail(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, setPrimaryEmail, id)
-	return err
-}
-
-const touchSession = `-- name: TouchSession :exec
-UPDATE sessions SET last_seen_at = $1 WHERE id = $2
-`
-
-type TouchSessionParams struct {
-	LastSeenAt pgtype.Timestamptz
-	ID         int64
-}
-
-func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) error {
-	_, err := q.db.Exec(ctx, touchSession, arg.LastSeenAt, arg.ID)
-	return err
-}
-
 const updateAuthFlow = `-- name: UpdateAuthFlow :exec
-UPDATE auth_flows SET flow_state = $1, context = $2, completed_at = $3
-WHERE id = $4
+UPDATE auth_flows SET flow_state = $1, completed_at = $2 WHERE id = $3
 `
 
 type UpdateAuthFlowParams struct {
 	FlowState   int16
-	Context     []byte
 	CompletedAt pgtype.Timestamptz
 	ID          int64
 }
 
 func (q *Queries) UpdateAuthFlow(ctx context.Context, arg UpdateAuthFlowParams) error {
-	_, err := q.db.Exec(ctx, updateAuthFlow,
-		arg.FlowState,
-		arg.Context,
-		arg.CompletedAt,
-		arg.ID,
-	)
+	_, err := q.db.Exec(ctx, updateAuthFlow, arg.FlowState, arg.CompletedAt, arg.ID)
 	return err
 }
 
-const updateMfaFactor = `-- name: UpdateMfaFactor :exec
-UPDATE mfa_factors SET name = $1, verified_at = $2, last_used_at = $3, revoked_at = $4
-WHERE id = $5
+const updateMfaFactorLastUsedAt = `-- name: UpdateMfaFactorLastUsedAt :exec
+UPDATE mfa_factors SET last_used_at = $1 WHERE id = $2
 `
 
-type UpdateMfaFactorParams struct {
-	Name       string
-	VerifiedAt pgtype.Timestamptz
+type UpdateMfaFactorLastUsedAtParams struct {
 	LastUsedAt pgtype.Timestamptz
-	RevokedAt  pgtype.Timestamptz
 	ID         int64
 }
 
-func (q *Queries) UpdateMfaFactor(ctx context.Context, arg UpdateMfaFactorParams) error {
-	_, err := q.db.Exec(ctx, updateMfaFactor,
-		arg.Name,
-		arg.VerifiedAt,
-		arg.LastUsedAt,
-		arg.RevokedAt,
-		arg.ID,
-	)
-	return err
-}
-
-const updatePasskey = `-- name: UpdatePasskey :exec
-UPDATE passkeys SET sign_count = $1, last_used_at = $2, revoked_at = $3, name = $4
-WHERE id = $5
-`
-
-type UpdatePasskeyParams struct {
-	SignCount  int64
-	LastUsedAt pgtype.Timestamptz
-	RevokedAt  pgtype.Timestamptz
-	Name       string
-	ID         int64
-}
-
-func (q *Queries) UpdatePasskey(ctx context.Context, arg UpdatePasskeyParams) error {
-	_, err := q.db.Exec(ctx, updatePasskey,
-		arg.SignCount,
-		arg.LastUsedAt,
-		arg.RevokedAt,
-		arg.Name,
-		arg.ID,
-	)
-	return err
-}
-
-const updatePasswordCredential = `-- name: UpdatePasswordCredential :exec
-UPDATE password_credentials SET password = $1, password_changed_at = $2, updated_at = $3
-WHERE user_id = $4
-`
-
-type UpdatePasswordCredentialParams struct {
-	Password          string
-	PasswordChangedAt pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
-	UserID            int64
-}
-
-func (q *Queries) UpdatePasswordCredential(ctx context.Context, arg UpdatePasswordCredentialParams) error {
-	_, err := q.db.Exec(ctx, updatePasswordCredential,
-		arg.Password,
-		arg.PasswordChangedAt,
-		arg.UpdatedAt,
-		arg.UserID,
-	)
+func (q *Queries) UpdateMfaFactorLastUsedAt(ctx context.Context, arg UpdateMfaFactorLastUsedAtParams) error {
+	_, err := q.db.Exec(ctx, updateMfaFactorLastUsedAt, arg.LastUsedAt, arg.ID)
 	return err
 }
 
@@ -1675,73 +805,8 @@ func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) er
 	return err
 }
 
-const updateTotpSecret = `-- name: UpdateTotpSecret :exec
-UPDATE totp_factors SET secret = $1 WHERE factor_id = $2
-`
-
-type UpdateTotpSecretParams struct {
-	Secret   []byte
-	FactorID int64
-}
-
-func (q *Queries) UpdateTotpSecret(ctx context.Context, arg UpdateTotpSecretParams) error {
-	_, err := q.db.Exec(ctx, updateTotpSecret, arg.Secret, arg.FactorID)
-	return err
-}
-
-const updateUser = `-- name: UpdateUser :exec
-UPDATE users SET status = $1, name = $2, avatar_url = $3, updated_at = $4, deleted_at = $5
-WHERE id = $6
-`
-
-type UpdateUserParams struct {
-	Status    int16
-	Name      string
-	AvatarUrl pgtype.Text
-	UpdatedAt pgtype.Timestamptz
-	DeletedAt pgtype.Timestamptz
-	ID        int64
-}
-
-func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
-	_, err := q.db.Exec(ctx, updateUser,
-		arg.Status,
-		arg.Name,
-		arg.AvatarUrl,
-		arg.UpdatedAt,
-		arg.DeletedAt,
-		arg.ID,
-	)
-	return err
-}
-
-const updateUserEmail = `-- name: UpdateUserEmail :exec
-UPDATE user_emails SET email = $1, is_primary = $2, verified_at = $3, deleted_at = $4
-WHERE id = $5
-`
-
-type UpdateUserEmailParams struct {
-	Email      string
-	IsPrimary  bool
-	VerifiedAt pgtype.Timestamptz
-	DeletedAt  pgtype.Timestamptz
-	ID         int64
-}
-
-func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) error {
-	_, err := q.db.Exec(ctx, updateUserEmail,
-		arg.Email,
-		arg.IsPrimary,
-		arg.VerifiedAt,
-		arg.DeletedAt,
-		arg.ID,
-	)
-	return err
-}
-
 const updateVerificationChallenge = `-- name: UpdateVerificationChallenge :exec
-UPDATE verification_challenges SET attempts = $1, consumed_at = $2
-WHERE id = $3
+UPDATE verification_challenges SET attempts = $1, consumed_at = $2 WHERE id = $3
 `
 
 type UpdateVerificationChallengeParams struct {
@@ -1752,30 +817,5 @@ type UpdateVerificationChallengeParams struct {
 
 func (q *Queries) UpdateVerificationChallenge(ctx context.Context, arg UpdateVerificationChallengeParams) error {
 	_, err := q.db.Exec(ctx, updateVerificationChallenge, arg.Attempts, arg.ConsumedAt, arg.ID)
-	return err
-}
-
-const upsertPasswordCredential = `-- name: UpsertPasswordCredential :exec
-INSERT INTO password_credentials (user_id, password, password_changed_at, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (user_id) DO UPDATE SET password = EXCLUDED.password, password_changed_at = EXCLUDED.password_changed_at, updated_at = EXCLUDED.updated_at
-`
-
-type UpsertPasswordCredentialParams struct {
-	UserID            int64
-	Password          string
-	PasswordChangedAt pgtype.Timestamptz
-	CreatedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
-}
-
-func (q *Queries) UpsertPasswordCredential(ctx context.Context, arg UpsertPasswordCredentialParams) error {
-	_, err := q.db.Exec(ctx, upsertPasswordCredential,
-		arg.UserID,
-		arg.Password,
-		arg.PasswordChangedAt,
-		arg.CreatedAt,
-		arg.UpdatedAt,
-	)
 	return err
 }

@@ -7,10 +7,11 @@ import (
 
 	connectrpc "connectrpc.com/connect"
 	"github.com/jackc/pgx/v5/pgxpool"
+	otpLib "github.com/pquerna/otp"
 	"github.com/qarven/mono/gen/go/oryon/identity/v1/identityconnect"
 	"github.com/qarven/oryon-go/internal/identity/application"
-	"github.com/qarven/oryon-go/internal/identity/infrastructure/cache"
-	"github.com/qarven/oryon-go/internal/identity/infrastructure/persistence"
+	"github.com/qarven/oryon-go/internal/identity/infrastructure/cache/redis"
+	"github.com/qarven/oryon-go/internal/identity/infrastructure/persistence/postgres"
 	"github.com/qarven/oryon-go/internal/identity/presentation/connect"
 	"github.com/qarven/oryon-go/internal/pkg/clock"
 	"github.com/qarven/oryon-go/internal/pkg/config"
@@ -19,20 +20,22 @@ import (
 	"github.com/qarven/oryon-go/internal/pkg/hash"
 	"github.com/qarven/oryon-go/internal/pkg/instrument"
 	"github.com/qarven/oryon-go/internal/pkg/jwt"
+	"github.com/qarven/oryon-go/internal/pkg/messaging"
+	"github.com/qarven/oryon-go/internal/pkg/mfa"
 	"github.com/qarven/oryon-go/internal/pkg/uid"
 	"github.com/qarven/oryon-go/internal/pkg/validator"
-	"github.com/redis/go-redis/v9"
+	redisLib "github.com/redis/go-redis/v9"
 )
 
 type Dependency struct {
 	DBConn       *pgxpool.Pool              `validate:"required"`
-	CacheConn    *redis.Client              `validate:"required"`
+	CacheConn    *redisLib.Client           `validate:"required"`
+	Messaging    messaging.Messaging        `validate:"required"`
 	Goroutine    *goroutine.Manager         `validate:"required"`
 	Config       config.Config              `validate:"required"`
 	Instrument   instrument.Instrumentation `validate:"required"`
 	UID          uid.NumberID               `validate:"required"`
 	UUID         uid.StringID               `validate:"required"`
-	Argon2ID     hash.Hash                  `validate:"required"`
 	Clock        clock.Clocker              `validate:"required"`
 	Validator    validator.Validator        `validate:"required"`
 	Interceptors []connectrpc.Interceptor   `validate:"required"`
@@ -49,6 +52,13 @@ func New(dep Dependency) (*Expose, error) {
 		return nil, fmt.Errorf("validate dependencies module identity: %w", err)
 	}
 
+	argon2id := hash.NewArgon2id(dep.Config.GetString("modules.identity.hash.argon2id.pepper"))
+	sha256 := hash.NewHMACSHA256(dep.Config.GetString("modules.identity.hash.hmac.secret"))
+	bcryptHash := hash.NewBcrypt(
+		dep.Config.GetInt("modules.identity.hash.bcrypt.cost"),
+		dep.Config.GetString("modules.identity.hash.bcrypt.pepper"),
+	)
+
 	mfaRawSecret, err := base64.StdEncoding.DecodeString(dep.Config.GetString("modules.identity.mfa.secret"))
 	if err != nil {
 		return nil, fmt.Errorf("decode mfa secret: %w", err)
@@ -62,6 +72,13 @@ func New(dep Dependency) (*Expose, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create mfa encryptor: %w", err)
 	}
+
+	mfaTotp := mfa.NewTOTP(
+		dep.Config.GetString("mfa.totp.issuer"),
+		dep.Config.GetUint("mfa.totp.period"),
+		dep.Config.GetUint("mfa.totp.skew"),
+		otpLib.DigitsSix,
+	)
 
 	accessJWT, err := jwt.NewHS512(jwt.Config{
 		Secret:    []byte(dep.Config.GetString("modules.identity.jwt.access.secret")),
@@ -85,18 +102,21 @@ func New(dep Dependency) (*Expose, error) {
 		return nil, err
 	}
 
-	repository := persistence.NewPostgres(dep.DBConn, dep.Instrument)
-	cacheRepo := cache.NewRedis(dep.CacheConn, dep.Instrument)
+	repository := postgres.New(dep.DBConn, dep.Instrument)
+	cacheRepo := redis.New(dep.CacheConn, dep.Instrument)
 
 	service := application.New(application.Dependency{
 		Repository:      repository,
 		CacheRepository: cacheRepo,
 		Validator:       dep.Validator,
 		Config:          dep.Config,
-		Argon2ID:        dep.Argon2ID,
+		Argon2ID:        argon2id,
+		SHA256:          sha256,
+		Bcrypt:          bcryptHash,
 		MfaEncryption:   mfaEncryption,
 		UID:             dep.UID,
 		UUID:            dep.UUID,
+		OTP:             mfaTotp,
 		Clock:           dep.Clock,
 		AccessJWT:       accessJWT,
 		RefreshJWT:      refreshJWT,
@@ -104,37 +124,16 @@ func New(dep Dependency) (*Expose, error) {
 		Goroutine:       dep.Goroutine,
 	})
 
-	serverAuth := connect.NewAuthenticationServer(service)
-	serverUser := connect.NewUserServer(service)
-	serverSession := connect.NewSessionServer(service)
-	serverMfa := connect.NewMfaServer(service)
+	serverAuth := connect.NewAuthenticationServer(service, dep.Config)
 
 	dep.Muxer.Handle(identityconnect.NewAuthenticationServiceHandler(
 		serverAuth,
 		connectrpc.WithInterceptors(dep.Interceptors...),
 	))
 
-	dep.Muxer.Handle(identityconnect.NewUserServiceHandler(
-		serverUser,
-		connectrpc.WithInterceptors(dep.Interceptors...),
-	))
-
-	dep.Muxer.Handle(identityconnect.NewSessionServiceHandler(
-		serverSession,
-		connectrpc.WithInterceptors(dep.Interceptors...),
-	))
-
-	dep.Muxer.Handle(identityconnect.NewMfaServiceHandler(
-		serverMfa,
-		connectrpc.WithInterceptors(dep.Interceptors...),
-	))
-
 	return &Expose{
 		ServiceNames: []string{
 			identityconnect.AuthenticationServiceName,
-			identityconnect.UserServiceName,
-			identityconnect.SessionServiceName,
-			identityconnect.MfaServiceName,
 		},
 	}, nil
 }

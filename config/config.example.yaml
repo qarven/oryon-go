@@ -44,8 +44,11 @@ app:
   authentication:
     # Comma-separated list of connect procedures that skip authentication (exact match only).
     public_endpoints: >
+      /oryon.identity.v1.AuthenticationService/Registration,
       /oryon.identity.v1.AuthenticationService/Login,
-      /oryon.identity.v1.AuthenticationService/RefreshToken
+      /oryon.identity.v1.AuthenticationService/RefreshToken,
+      /oryon.identity.v1.AuthenticationService/RequestEmailVerification,
+      /oryon.identity.v1.AuthenticationService/VerifyEmail
 
 # =============================================================================
 # Cloudflare Settings
@@ -182,23 +185,43 @@ mail:
   from: no-replay@oryon.com
 
 # =============================================================================
-# Hashing & Cryptography Configuration
+# Messaging / Event System Configuration
 # =============================================================================
-hash:
-  hmac:
-    # Secret key for HMAC signing
-    secret: "secret"
+messaging:
+  # Messaging backend to use
+  # Supported values: nsq | kafka | nats | pubsub
+  driver: nsq
 
-  argon2id:
-    # Pepper added to password before hashing
-    pepper: "secret"
+  # ---------------------------------------------------------------------------
+  # NATS Configuration
+  # ---------------------------------------------------------------------------
+  nats:
+    # NATS server URL
+    url: "nats://localhost:4222"
 
-  bcrypt:
-    # Cost factor (higher = slower & more secure)
-    cost: 12
+    # Client name
+    name: "oryon"
 
-    # Pepper added to password before hashing
-    pepper: "secret"
+    # Connection timeout (seconds)
+    timeout_seconds: 10
+
+    # Maximum reconnect attempts
+    max_reconnects: 60
+
+    # Wait time between reconnects (seconds)
+    reconnect_wait_seconds: 2
+
+    # Ping interval (seconds)
+    ping_interval_seconds: 30
+
+    # Max unanswered pings
+    max_pings_outstanding: 2
+
+    # Disable receiving own published messages
+    no_echo: false
+
+    # Retry connection on failure
+    retry_on_failed_connect: true
 
 # =============================================================================
 # Feature Modules Configuration
@@ -207,6 +230,27 @@ modules:
   identity:
     # Enable authentication module
     enabled: true
+
+    # auth flow
+    auth_flow:
+      # auth flow expiration time (minutes)
+      ttl: 10
+
+    # verification challenge (email/phone/password-reset/mfa)
+    verification:
+      # verification challenge expiration time (minutes)
+      ttl: 15
+      # max verification attempts per challenge
+      max_attempts: 3
+      # email verification request rate limit window (minutes)
+      rate_limit_window: 15
+      # max email verification requests per window, per email and per IP
+      rate_limit_max: 5
+
+    # session
+    session:
+      # session expiration time (days)
+      ttl: 7
 
     # Multi-Factor Authentication (MFA)
     mfa:
@@ -223,6 +267,23 @@ modules:
 
         # Allowed clock skew (number of steps)
         skew: 1
+
+    # Hashing & Cryptography Configuration
+    hash:
+      hmac:
+        # Secret key for HMAC signing
+        secret: "secret"
+
+      argon2id:
+        # Pepper added to password before hashing
+        pepper: "secret"
+
+      bcrypt:
+        # Cost factor (higher = slower & more secure)
+        cost: 12
+
+        # Pepper added to password before hashing
+        pepper: "secret"
 
     # JWT (Authentication Token) Configuration
     jwt:

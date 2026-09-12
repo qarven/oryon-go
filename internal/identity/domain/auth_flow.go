@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+var (
+	ErrAuthFlowNotFound = errors.New("auth flow not found")
+)
+
+const TokenType string = "Bearer"
+
 type AuthFlowType int16
 
 const (
@@ -17,10 +23,28 @@ const (
 
 func (t AuthFlowType) IsValid() bool {
 	switch t {
-	case AuthFlowTypeRegistration, AuthFlowTypeLogin, AuthFlowTypeRecovery, AuthFlowTypeStepUpMFA:
+	case AuthFlowTypeRegistration,
+		AuthFlowTypeLogin,
+		AuthFlowTypeRecovery,
+		AuthFlowTypeStepUpMFA:
 		return true
 	default:
 		return false
+	}
+}
+
+func (t AuthFlowType) Value() int16 {
+	switch t {
+	case AuthFlowTypeRegistration:
+		return 1
+	case AuthFlowTypeLogin:
+		return 2
+	case AuthFlowTypeRecovery:
+		return 3
+	case AuthFlowTypeStepUpMFA:
+		return 4
+	default:
+		return 0
 	}
 }
 
@@ -38,11 +62,34 @@ const (
 
 func (s AuthFlowState) IsValid() bool {
 	switch s {
-	case AuthFlowStatePendingIdentifier, AuthFlowStatePendingPassword, AuthFlowStatePendingMFA,
-		AuthFlowStatePendingVerification, AuthFlowStateCompleted, AuthFlowStateFailed:
+	case AuthFlowStatePendingIdentifier,
+		AuthFlowStatePendingPassword,
+		AuthFlowStatePendingMFA,
+		AuthFlowStatePendingVerification,
+		AuthFlowStateCompleted,
+		AuthFlowStateFailed:
 		return true
 	default:
 		return false
+	}
+}
+
+func (s AuthFlowState) Value() int16 {
+	switch s {
+	case AuthFlowStatePendingIdentifier:
+		return 1
+	case AuthFlowStatePendingPassword:
+		return 2
+	case AuthFlowStatePendingMFA:
+		return 3
+	case AuthFlowStatePendingVerification:
+		return 4
+	case AuthFlowStateCompleted:
+		return 5
+	case AuthFlowStateFailed:
+		return 5
+	default:
+		return 0
 	}
 }
 
@@ -63,62 +110,6 @@ type AuthFlow struct {
 	CompletedAt *time.Time
 }
 
-var (
-	ErrAuthFlowNotFound = errors.New("auth flow not found")
-	ErrAuthFlowExpired  = errors.New("auth flow expired")
-	ErrAuthFlowInvalid  = errors.New("auth flow is not in valid state")
-)
-
-func NewAuthFlow(id int64, userID *int64, flowType AuthFlowType, flowState AuthFlowState, ip, ua *string, ctx map[string]any, now, expiresAt time.Time) (*AuthFlow, error) {
-	if !flowType.IsValid() {
-		return nil, errors.New("invalid flow type")
-	}
-
-	if !flowState.IsValid() {
-		return nil, errors.New("invalid flow state")
-	}
-
-	if expiresAt.Before(now) {
-		return nil, errors.New("expires_at must be in the future")
-	}
-
-	if ctx == nil {
-		ctx = make(map[string]any)
-	}
-
-	return &AuthFlow{
-		ID:        id,
-		UserID:    userID,
-		FlowType:  flowType,
-		FlowState: flowState,
-		IPAddress: ip,
-		UserAgent: ua,
-		Context:   ctx,
-		CreatedAt: now,
-		ExpiresAt: expiresAt,
-	}, nil
-}
-
-func (f *AuthFlow) IsExpired(now time.Time) bool {
+func (f AuthFlow) IsExpired(now time.Time) bool {
 	return now.After(f.ExpiresAt)
-}
-
-func (f *AuthFlow) Complete(now time.Time) error {
-	if f.IsExpired(now) {
-		return ErrAuthFlowExpired
-	}
-
-	if f.FlowState.IsTerminal() {
-		return ErrAuthFlowInvalid
-	}
-
-	f.FlowState = AuthFlowStateCompleted
-	f.CompletedAt = &now
-
-	return nil
-}
-
-func (f *AuthFlow) Fail(now time.Time) {
-	f.FlowState = AuthFlowStateFailed
-	f.CompletedAt = &now
 }

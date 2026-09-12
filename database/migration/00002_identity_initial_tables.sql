@@ -3,12 +3,14 @@ CREATE TABLE users (
     id BIGINT PRIMARY KEY,
     status SMALLINT NOT NULL,
     name TEXT NOT NULL,
+    username TEXT,
     avatar_url TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
 COMMENT ON COLUMN users.status IS '1=active, 2=inactive, 3=locked, 4=suspended, 5=deleted';
+CREATE UNIQUE INDEX user_username_idx ON users(username) WHERE username IS NOT NULL;
 
 CREATE TABLE user_emails (
     id BIGINT PRIMARY KEY,
@@ -64,7 +66,7 @@ CREATE TABLE auth_flows (
     user_id BIGINT REFERENCES users(id) ON DELETE CASCADE, -- Nullable initially if it's a registration flow
     flow_type SMALLINT NOT NULL,
     flow_state SMALLINT NOT NULL,
-    ip_address INET,
+    ip_address TEXT,
     user_agent TEXT,
     context JSONB NOT NULL DEFAULT '{}', -- Store redirect URLs, requested scopes, or selected MFA methods
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -84,7 +86,7 @@ CREATE TABLE sessions (
     expires_at TIMESTAMPTZ NOT NULL,
     last_seen_at TIMESTAMPTZ,
     revoked_at TIMESTAMPTZ,
-    ip_address INET,
+    ip_address TEXT,
     user_agent TEXT,
     mfa_verified_at TIMESTAMPTZ
 );
@@ -100,7 +102,7 @@ CREATE TABLE refresh_tokens (
     expires_at TIMESTAMPTZ NOT NULL,
     revoked_at TIMESTAMPTZ,
     replaced_by BIGINT REFERENCES refresh_tokens(id),
-    created_ip INET
+    created_ip TEXT
 );
 CREATE INDEX refresh_tokens_session_idx ON refresh_tokens(session_id);
 COMMENT ON COLUMN refresh_tokens.token IS 'Hash value using SHA-256 of the actual refresh token';
@@ -165,7 +167,7 @@ CREATE TABLE verification_challenges (
     code BYTEA,
     attempts SMALLINT NOT NULL DEFAULT 0,
     max_attempts SMALLINT NOT NULL DEFAULT 3,
-    ip_address INET, -- Added to mitigate brute force & rate limit abuse
+    ip_address TEXT, -- Added to mitigate brute force & rate limit abuse
     expires_at TIMESTAMPTZ NOT NULL,
     consumed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -179,7 +181,7 @@ CREATE TABLE security_events (
     id BIGINT PRIMARY KEY,
     user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     event_type TEXT NOT NULL,
-    ip_address INET,
+    ip_address TEXT,
     user_agent TEXT,
     metadata JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

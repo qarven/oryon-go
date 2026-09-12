@@ -12,7 +12,6 @@ import (
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
 	enTranslations "github.com/go-playground/validator/v10/translations/en"
-	"github.com/qarven/oryon-go/internal/pkg/strcase"
 )
 
 var (
@@ -88,8 +87,10 @@ func (v *V10Validator) Validate(data any) error {
 		}
 
 		errV10 := make(V10ValidationError)
+
 		for _, fe := range validateErrs {
-			errV10[strcase.ToLowerSnake(fe.Field())] = fe.Translate(v.translator)
+			// errV10[strcase.ToLowerSnake(fe.Field())] = fe.Translate(v.translator)
+			return fmt.Errorf("validation error: %s", fe.Translate(v.translator))
 		}
 
 		return errV10

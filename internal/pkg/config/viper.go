@@ -127,32 +127,32 @@ func (vc *Viper) GetFloat64(key string) float64 {
 
 // GetSecond returns the value for key as seconds.
 func (vc *Viper) GetSecond(key string) time.Duration {
-	return time.Duration(vc.v.GetInt64(key)) * time.Second
+	return time.Duration(vc.GetInt64(key)) * time.Second
 }
 
 // GetMinute returns the value for key as minutes.
 func (vc *Viper) GetMinute(key string) time.Duration {
-	return time.Duration(vc.v.GetInt64(key)) * time.Minute
+	return time.Duration(vc.GetInt64(key)) * time.Minute
 }
 
 // GetHour returns the value for key as hours.
 func (vc *Viper) GetHour(key string) time.Duration {
-	return time.Duration(vc.v.GetInt64(key)) * time.Hour
+	return time.Duration(vc.GetInt64(key)) * time.Hour
 }
 
 // GetDay returns the value for key as days (24h).
 func (vc *Viper) GetDay(key string) time.Duration {
-	return time.Duration(vc.v.GetInt64(key)) * 24 * time.Hour
+	return time.Duration(vc.GetInt64(key)) * 24 * time.Hour
 }
 
 // GetString returns the value for key as string.
 func (vc *Viper) GetString(key string) string {
-	return vc.v.GetString(key)
+	return strings.TrimSpace(vc.v.GetString(key))
 }
 
 // GetBinary returns the value for key decoded from base64.
 func (vc *Viper) GetBinary(key string) []byte {
-	data, err := base64.StdEncoding.DecodeString(vc.v.GetString(key))
+	data, err := base64.StdEncoding.DecodeString(vc.GetString(key))
 	if err != nil {
 		return nil
 	}
@@ -162,12 +162,12 @@ func (vc *Viper) GetBinary(key string) []byte {
 
 // GetArray returns the value for key split by commas.
 func (vc *Viper) GetArray(key string) []string {
-	return strings.Split(vc.v.GetString(key), ",")
+	return strings.Split(vc.GetString(key), ",")
 }
 
 // GetMap returns the value for key parsed from "k:v,k:v" pairs.
 func (vc *Viper) GetMap(key string) map[string]string {
-	pairs := strings.Split(vc.v.GetString(key), ",")
+	pairs := strings.Split(vc.GetString(key), ",")
 	result := make(map[string]string)
 
 	for _, pair := range pairs {

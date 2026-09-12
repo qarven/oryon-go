@@ -9,9 +9,9 @@ import (
 	"github.com/qarven/oryon-go/internal/pkg/clock"
 	"github.com/qarven/oryon-go/internal/pkg/config"
 	"github.com/qarven/oryon-go/internal/pkg/goroutine"
-	"github.com/qarven/oryon-go/internal/pkg/hash"
 	"github.com/qarven/oryon-go/internal/pkg/instrument"
 	"github.com/qarven/oryon-go/internal/pkg/mail"
+	"github.com/qarven/oryon-go/internal/pkg/messaging"
 	"github.com/qarven/oryon-go/internal/pkg/uid"
 	"github.com/qarven/oryon-go/internal/pkg/validator"
 	"github.com/redis/go-redis/v9"
@@ -31,9 +31,6 @@ type App struct {
 	goroutine *goroutine.Manager
 	validator validator.Validator
 	clock     clock.Clocker
-	hmac      hash.Hash
-	argon2id  hash.Hash
-	bcrypt    hash.Hash
 	uuid      uid.StringID
 	uid       uid.NumberID
 
@@ -41,6 +38,7 @@ type App struct {
 	dbConn    *pgxpool.Pool
 	cacheConn *redis.Client
 	mail      mail.Mail
+	messaging messaging.Messaging
 
 	// server
 	connectServiceNames []string
@@ -68,6 +66,7 @@ func New() *App {
 	app.initDatabase()
 	app.initCache()
 	app.initMail()
+	app.initMessaging()
 	app.initMiddleware() // init global middleware
 	app.initModules()    // init before http server
 	app.initHTTPServer() // init after modules

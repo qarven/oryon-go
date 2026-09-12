@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	correlationID = "_correlation_id"
-	traceID       = "_trace_id"
-	spanID        = "_span_id"
+	CorrelationIDKey = "_correlation_id"
+	traceID          = "_trace_id"
+	spanID           = "_span_id"
 )
 
 type contextHandler struct {
@@ -23,7 +23,7 @@ type contextHandler struct {
 func (h *contextHandler) Handle(ctx context.Context, record slog.Record) error {
 	if h.getCorrelationID != nil {
 		if cID := h.getCorrelationID(ctx); cID != "" && cID != "[invalid_chain_id]" {
-			record.AddAttrs(slog.String(correlationID, cID))
+			record.AddAttrs(slog.String(CorrelationIDKey, cID))
 		}
 	}
 

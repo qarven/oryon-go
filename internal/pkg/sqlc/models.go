@@ -5,8 +5,6 @@
 package sqlc
 
 import (
-	"net/netip"
-
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -17,7 +15,7 @@ type AuthFlow struct {
 	FlowType int16
 	// 1=pending_identifier, 2=pending_password, 3=pending_mfa, 4=pending_verification, 5=completed, 6=failed
 	FlowState   int16
-	IpAddress   *netip.Addr
+	IpAddress   pgtype.Text
 	UserAgent   pgtype.Text
 	Context     []byte
 	CreatedAt   pgtype.Timestamptz
@@ -91,7 +89,7 @@ type RefreshToken struct {
 	ExpiresAt  pgtype.Timestamptz
 	RevokedAt  pgtype.Timestamptz
 	ReplacedBy pgtype.Int8
-	CreatedIp  *netip.Addr
+	CreatedIp  pgtype.Text
 }
 
 type SecurityEvent struct {
@@ -99,7 +97,7 @@ type SecurityEvent struct {
 	UserID pgtype.Int8
 	// Examples: user.created, email.verified, login.failed, password.changed, mfa.enabled
 	EventType string
-	IpAddress *netip.Addr
+	IpAddress pgtype.Text
 	UserAgent pgtype.Text
 	Metadata  []byte
 	CreatedAt pgtype.Timestamptz
@@ -114,7 +112,7 @@ type Session struct {
 	ExpiresAt     pgtype.Timestamptz
 	LastSeenAt    pgtype.Timestamptz
 	RevokedAt     pgtype.Timestamptz
-	IpAddress     *netip.Addr
+	IpAddress     pgtype.Text
 	UserAgent     pgtype.Text
 	MfaVerifiedAt pgtype.Timestamptz
 }
@@ -135,6 +133,7 @@ type User struct {
 	// 1=active, 2=inactive, 3=locked, 4=suspended, 5=deleted
 	Status    int16
 	Name      string
+	Username  pgtype.Text
 	AvatarUrl pgtype.Text
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
@@ -173,7 +172,7 @@ type VerificationChallenge struct {
 	Code        []byte
 	Attempts    int16
 	MaxAttempts int16
-	IpAddress   *netip.Addr
+	IpAddress   pgtype.Text
 	ExpiresAt   pgtype.Timestamptz
 	ConsumedAt  pgtype.Timestamptz
 	CreatedAt   pgtype.Timestamptz

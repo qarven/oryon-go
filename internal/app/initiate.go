@@ -14,12 +14,13 @@ import (
 	connectvalidate "connectrpc.com/validate"
 	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nats-io/nats.go"
 	"github.com/qarven/oryon-go/internal/pkg/clock"
 	"github.com/qarven/oryon-go/internal/pkg/config"
 	"github.com/qarven/oryon-go/internal/pkg/goroutine"
-	"github.com/qarven/oryon-go/internal/pkg/hash"
 	"github.com/qarven/oryon-go/internal/pkg/instrument"
 	"github.com/qarven/oryon-go/internal/pkg/mail"
+	"github.com/qarven/oryon-go/internal/pkg/messaging"
 	"github.com/qarven/oryon-go/internal/pkg/middleware"
 	"github.com/qarven/oryon-go/internal/pkg/uid"
 	"github.com/qarven/oryon-go/internal/pkg/validator"
@@ -77,9 +78,6 @@ func (a *App) initLibraries() {
 	a.clock = clock.New()
 	a.uuid = uid.NewUUID()
 	a.goroutine = goroutine.NewManager(a.config.GetInt("app.server.max_goroutine"))
-	a.hmac = hash.NewHMACSHA256(a.config.GetString("hash.hmac.secret"))
-	a.argon2id = hash.NewArgon2id(a.config.GetString("hash.argon2id.pepper"))
-	a.bcrypt = hash.NewBcrypt(a.config.GetInt("hash.bcrypt.cost"), a.config.GetString("hash.bcrypt.pepper"))
 
 	validator, err := validator.NewV10Validator()
 	if err != nil {
@@ -137,6 +135,7 @@ func (a *App) initDatabase() {
 func (a *App) setupDBObservability(cfg *pgxpool.Config) {
 	if !a.config.GetBool("database.observability.enabled") {
 		slog.Info("database observability disabled")
+
 		return
 	}
 
@@ -146,7 +145,7 @@ func (a *App) setupDBObservability(cfg *pgxpool.Config) {
 	}
 
 	if a.config.GetBool("database.observability.trim_sql_span_name") {
-		opts = append(opts, otelpgx.WithTrimSQLInSpanName())
+		opts = append(opts, otelpgx.WithFullSQLInSpanName())
 	}
 
 	if a.config.GetBool("database.observability.disable_sql_statement") {
@@ -173,6 +172,7 @@ func (a *App) setupDBObservability(cfg *pgxpool.Config) {
 func (a *App) setupDBPoolStats(pool *pgxpool.Pool) {
 	if !a.config.GetBool("database.observability.enabled") {
 		slog.Info("database pool stats disable")
+
 		return
 	}
 
@@ -229,15 +229,37 @@ func (a *App) initMail() {
 	a.mail = mail
 }
 
+func (a *App) initMessaging() {
+	msg, err := messaging.NewNATS(messaging.NATSConfig{
+		URL: a.config.GetString("messaging.nats.url"),
+		Options: []nats.Option{
+			nats.Name(a.config.GetString("messaging.nats.name")),
+			nats.MaxReconnects(a.config.GetInt("messaging.nats.max_reconnects")),
+			nats.Timeout(a.config.GetSecond("messaging.nats.timeout_seconds")),
+			nats.ReconnectWait(a.config.GetSecond("messaging.nats.reconnect_wait_seconds")),
+			nats.PingInterval(a.config.GetSecond("messaging.nats.ping_interval_seconds")),
+			nats.MaxPingsOutstanding(a.config.GetInt("messaging.nats.max_pings_outstanding")),
+			nats.RetryOnFailedConnect(a.config.GetBool("messaging.nats.retry_on_failed_connect")),
+			// nats.NoEcho(), if a.config.GetBool("messaging.nats.no_echo") == true
+		},
+	})
+	if err != nil {
+		slog.Error("failed to init messaging nats", "error", err)
+		os.Exit(1)
+	}
+
+	a.messaging = msg
+}
+
 func (a *App) initMiddleware() {
 	a.interceptors = []connect.Interceptor{
 		middleware.NewRecoveryInterceptor(),
 		middleware.NewMetaInterceptor(),
 		middleware.NewObservabilityInterceptor(), // outermost: sets the chain ID and logs every request
-		middleware.NewMaintenanceInterceptor(a.config.GetArray("app.maintenance.endpoints")),
+		middleware.NewMaintenanceInterceptor(a.config.GetArray("app.endpoint.maintenance")),
 		middleware.NewErrorInterceptor(),
-		// middleware.NewAuthenticationInterceptor(a.accessJWT, a.config.GetArray("app.authentication.public_endpoints")),
-		connectvalidate.NewInterceptor(),
+		// middleware.NewAuthenticationInterceptor(a.accessJWT, a.config.GetArray("app.endpoint.public")),
+		connectvalidate.NewInterceptor(connectvalidate.WithoutErrorDetails()),
 	}
 }
 
@@ -280,6 +302,12 @@ func (a *App) initClosers() {
 		name string
 		fn   func(context.Context) error
 	}{
+		{
+			name: "Messaging",
+			fn: func(ctx context.Context) error {
+				return a.messaging.Close()
+			},
+		},
 		{
 			name: "Instrument",
 			fn: func(ctx context.Context) error {

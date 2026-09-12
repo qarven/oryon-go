@@ -27,7 +27,7 @@ var (
 // Ciphertext format (binary):
 // [0..1]   uint16 version (currently 1)
 // [2..13]  12-byte nonce
-// [14..]   gcm.Seal output (ciphertext + tag)
+// [14..]   gcm.Seal output (ciphertext + tag).
 const aesGCMVersion uint16 = 1
 
 const (
@@ -64,6 +64,7 @@ func (e *AES256Encryptor) Encrypt(plaintext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if gcm.NonceSize() != gcmNonceSize {
 		return nil, ErrUnexpectedNonceSize
 	}
@@ -107,6 +108,7 @@ func (e *AES256Encryptor) Decrypt(ciphertext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if gcm.NonceSize() != gcmNonceSize {
 		return nil, ErrUnexpectedNonceSize
 	}

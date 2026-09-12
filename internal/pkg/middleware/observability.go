@@ -12,7 +12,7 @@ import (
 )
 
 // ChainIDHeader is the HTTP header used to propagate the chain ID across services.
-const ChainIDHeader = "X-Chain-ID"
+const ChainIDHeader = "X-Chain-Id"
 
 // ObservabilityInterceptor attaches a chain ID to the request context and logs requests and responses.
 type ObservabilityInterceptor struct{}

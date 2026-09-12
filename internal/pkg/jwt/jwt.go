@@ -58,16 +58,13 @@ type Claims struct {
 
 	// UserID is the authenticated user identifier.
 	UserID int64 `json:"user_id,string"`
-	// UserEmail is the authenticated user email.
-	UserEmail string `json:"user_email"`
 }
 
 // NewClaims builds a Claims value for the given user.
-func NewClaims(userID int64, userEmail string) Claims {
+func NewClaims(userID int64) Claims {
 	return Claims{
 		RegisteredClaims: jwt.RegisteredClaims{},
 		UserID:           userID,
-		UserEmail:        userEmail,
 	}
 }
 

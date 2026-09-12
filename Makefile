@@ -25,7 +25,7 @@ help:
 
 restart: ## Restart local stack and refresh generated assets.
 	@podman-compose down -v
-	@podman-compose up
+	@podman-compose up -d
 	@$(MAKE) migrate-up
 	@$(MAKE) seed-up
 	@$(MAKE) gen-sql
@@ -91,7 +91,7 @@ compose-up: ## Start the podman compose stack.
 	@podman-compose up -d
 
 compose-down: ## Stop the podman compose stack.
-	@podman-compose down
+	@podman-compose down -v
 
 ## ***** ***** ***** ***** ***** ***** ***** ***** ***** *****
 ## Generator

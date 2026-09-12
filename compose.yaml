@@ -51,6 +51,29 @@ services:
       - oryon-network
 
   # ===== ===== =====
+  # Messaging Broker
+  # ===== ===== =====
+  nats:
+    image: nats:2.14.6-alpine
+    pull_policy: missing
+    restart: unless-stopped
+    command: ["-js", "-m", "8222", "--store_dir", "/data"]
+    ports:
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222" # Monitoring endpoints
+    volumes:
+      - nats_oryon_data:/data
+    networks:
+      - oryon-network
+    healthcheck:
+      test:
+        ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz | grep -q ok"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ===== ===== =====
   # Observability (optional profile)
   # ===== ===== =====
   tempo:
@@ -108,6 +131,7 @@ volumes:
   postgres_oryon_data:
   redis_oryon_data:
   loki_oryon_data:
+  nats_oryon_data:
 
 networks:
   oryon-network:

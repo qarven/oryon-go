@@ -2,7 +2,6 @@ package connect
 
 import (
 	"context"
-	"net/http"
 
 	"connectrpc.com/connect"
 	v1 "github.com/qarven/mono/gen/go/oryon/identity/v1"
@@ -113,69 +112,46 @@ func (s *AuthenticationServer) Login(ctx context.Context, req *connect.Request[v
 		return nil, err
 	}
 
-	resp := &v1.LoginResponse{
-		MfaRequired: out.MFARequired,
+	resp := &v1.LoginResponse{}
+
+	if out.Token != nil && out.RefreshToken != nil && out.User != nil {
+		resp.Result = &v1.LoginResponse_Success{Success: &v1.LoginSuccess{
+			Token: &v1.Token{
+				AccessToken:  *out.Token,
+				RefreshToken: *out.RefreshToken,
+				TokenType:    domain.TokenType,
+				ExpiresIn:    *out.TokenExpiresIn,
+			},
+			User: &v1.User{
+				Id:        out.User.ID,
+				Status:    fromUserStatus(out.User.Status),
+				Name:      out.User.Name,
+				Username:  out.User.Username,
+				AvatarUrl: out.User.AvatarURL,
+				CreatedAt: timestamppb.New(out.User.CreatedAt),
+				UpdatedAt: timestamppb.New(out.User.UpdatedAt),
+			},
+		}}
 	}
 
-	if out.Token != nil && out.RefreshToken != nil {
-		resp.Token = &v1.Token{
-			AccessToken:  *out.Token,
-			RefreshToken: *out.RefreshToken,
-			TokenType:    domain.TokenType,
-			ExpiresIn:    *out.TokenExpiresIn,
-		}
+	availableMfaMethods := make([]v1.MfaFactorType, 0, len(out.AvailableMFAMethods))
+	for _, m := range out.AvailableMFAMethods {
+		availableMfaMethods = append(availableMfaMethods, fromMfaFactorType(m))
 	}
 
-	var cookieString string
-
-	if out.Session != nil {
-		maxAge := int(s.config.GetDay("modules.identity.session.ttl").Seconds())
-		cookie := &http.Cookie{
-			Name:     "oryon-session",
-			Value:    "rawSessionToken",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-			Domain:   ".oryon.com",
-			Path:     "/",
-			MaxAge:   maxAge,
-		}
-		cookieString = cookie.String()
+	if out.Flow != nil && out.MFARequired {
+		resp.Result = &v1.LoginResponse_Mfa{Mfa: &v1.MfaRequired{
+			Flow: &v1.AuthFlow{
+				Id:        out.Flow.ID,
+				FlowType:  fromAuthFlowType(out.Flow.FlowType),
+				FlowState: fromAuthFlowState(out.Flow.FlowState),
+				ExpiresAt: timestamppb.New(out.Flow.ExpiresAt),
+			},
+			AvailableMfaMethods: availableMfaMethods,
+		}}
 	}
 
-	if out.User != nil {
-		resp.User = &v1.User{
-			Id:        out.User.ID,
-			Status:    fromUserStatus(out.User.Status),
-			Name:      out.User.Name,
-			Username:  out.User.Username,
-			AvatarUrl: out.User.AvatarURL,
-			CreatedAt: timestamppb.New(out.User.CreatedAt),
-			UpdatedAt: timestamppb.New(out.User.UpdatedAt),
-		}
-	}
-
-	if out.Flow != nil {
-		resp.Flow = &v1.AuthFlow{
-			Id:        out.Flow.ID,
-			FlowType:  fromAuthFlowType(out.Flow.FlowType),
-			FlowState: fromAuthFlowState(out.Flow.FlowState),
-			ExpiresAt: timestamppb.New(out.Flow.ExpiresAt),
-		}
-	}
-
-	if len(out.AvailableMFAMethods) > 0 {
-		for _, m := range out.AvailableMFAMethods {
-			resp.AvailableMfaMethods = append(resp.AvailableMfaMethods, fromMfaFactorType(m))
-		}
-	}
-
-	res := connect.NewResponse(resp)
-	if out.Session != nil {
-		res.Header().Add("Set-Cookie", cookieString)
-	}
-
-	return res, nil
+	return connect.NewResponse(resp), nil
 }
 
 func (s *AuthenticationServer) RefreshToken(ctx context.Context, req *connect.Request[v1.RefreshTokenRequest]) (*connect.Response[v1.RefreshTokenResponse], error) {

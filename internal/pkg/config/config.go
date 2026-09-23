@@ -109,8 +109,8 @@ type Config interface {
 
 	// GetArray retrieves the configuration value associated with the given key as a slice of strings.
 	// If the key does not exist or the value cannot be converted to a string slice,
-	// the implementation should handle it accordingly (e.g., return a default value).
-	// Configuration value is stored with format <element1>,<element2>,...
+	// the implementation handles it by returning an empty slice or a predefined default value.
+	// Configuration value is stored as a native YAML sequence/array.
 	GetArray(key string) []string
 
 	// GetMap retrieves the configuration value associated with the given key as a map of strings to strings.

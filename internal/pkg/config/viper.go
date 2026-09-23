@@ -160,9 +160,9 @@ func (vc *Viper) GetBinary(key string) []byte {
 	return data
 }
 
-// GetArray returns the value for key split by commas.
+// GetArray retrieves the configuration value associated with the given key as a string slice.
 func (vc *Viper) GetArray(key string) []string {
-	return strings.Split(vc.GetString(key), ",")
+	return vc.v.GetStringSlice(key)
 }
 
 // GetMap returns the value for key parsed from "k:v,k:v" pairs.
@@ -173,7 +173,7 @@ func (vc *Viper) GetMap(key string) map[string]string {
 	for _, pair := range pairs {
 		keyValue := strings.SplitN(pair, ":", 2)
 		if len(keyValue) == 2 {
-			result[keyValue[0]] = keyValue[1]
+			result[strings.TrimSpace(keyValue[0])] = strings.TrimSpace(keyValue[1])
 		}
 	}
 

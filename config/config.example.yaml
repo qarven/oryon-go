@@ -35,18 +35,22 @@ app:
 
   # Endpoint Configuration
   endpoint:
-    # maintenance configuration, comma-separated list of connect procedures to block (exact match only).
-    maintenance: >
-      /oryon.identity.v1.AuthenticationService/Register,
-      /oryon.identity.v1.AuthenticationService/ResetPassword
+    # maintenance configuration, list of connect procedures to block (exact match only).
+    maintenance:
+      [
+        "/oryon.identity.v1.AuthenticationService/Register",
+        "/oryon.identity.v1.AuthenticationService/ResetPassword",
+      ]
 
-    # no auth needed, comma-separated list of connect procedures to block (exact match only).
-    public: >
-      /oryon.identity.v1.AuthenticationService/Registration,
-      /oryon.identity.v1.AuthenticationService/Login,
-      /oryon.identity.v1.AuthenticationService/RefreshToken,
-      /oryon.identity.v1.AuthenticationService/RequestEmailVerification,
-      /oryon.identity.v1.AuthenticationService/VerifyEmail
+    # no auth needed, list of connect procedures to block (exact match only).
+    public:
+      [
+        "/oryon.identity.v1.AuthenticationService/Registration",
+        "/oryon.identity.v1.AuthenticationService/Login",
+        "/oryon.identity.v1.AuthenticationService/RefreshToken",
+        "/oryon.identity.v1.AuthenticationService/RequestEmailVerification",
+        "/oryon.identity.v1.AuthenticationService/VerifyEmail",
+      ]
 
 # =============================================================================
 # Observability / Instrumentation Configuration
@@ -91,24 +95,25 @@ instrument:
   # List of sensitive fields to be masked in logs
   # Any occurrence of these keys will be replaced with "***"
   # Helps prevent credential leakage in logs
-  log_mask_fields: >
-    code,
-    cookie,
-    password,
-    newPassword,
-    authorization,
-    accessToken,
-    access_token,
-    refreshToken,
-    refresh_token,
-    newPassword,
-    new_password,
-    currentPassword,
-    current_password,
-    challengeToken,
-    challenge_token,
-    recoveryCodes,
-    recovery_codes
+log_mask_fields:
+  [
+    "code",
+    "cookie",
+    "password",
+    "newPassword",
+    "authorization",
+    "accessToken",
+    "access_token",
+    "refreshToken",
+    "refresh_token",
+    "new_password",
+    "currentPassword",
+    "current_password",
+    "challengeToken",
+    "challenge_token",
+    "recoveryCodes",
+    "recovery_codes",
+  ]
 
 # =============================================================================
 # Database Configuration
@@ -317,8 +322,10 @@ modules:
     # Enable notification module
     enabled: true
 
-    # Messaging consumer names (comma-separated)
-    consumers: >
-      identity.registration.notification,
-      identity.password_reset.notification,
-      identity.mfa_verification.notification
+    # Messaging consumer names
+    consumers:
+      [
+        "identity.registration.notification",
+        "identity.password_reset.notification",
+        "identity.mfa_verification.notification",
+      ]

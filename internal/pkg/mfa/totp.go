@@ -51,7 +51,7 @@ func NewTOTP(issuer string, period, skew uint, digits otp.Digits) *TOTP {
 }
 
 // Generate creates a secret and provisioning URI for an account name.
-func (o *TOTP) Generate(accountName string) (secret string, uri string, err error) {
+func (o *TOTP) Generate(accountName string) (string, string, error) {
 	key, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      o.issuer,
 		AccountName: accountName,
@@ -69,14 +69,14 @@ func (o *TOTP) Generate(accountName string) (secret string, uri string, err erro
 
 // Validate checks whether a code is valid at the given time.
 func (o *TOTP) Validate(code, secret string, at time.Time) bool {
-	rv, err := totp.ValidateCustom(code, secret, at, totp.ValidateOpts{
+	valid, err := totp.ValidateCustom(code, secret, at, totp.ValidateOpts{
 		Period:    o.period,
 		Skew:      o.skew,
 		Digits:    o.digits,
 		Algorithm: otp.AlgorithmSHA1,
 	})
 
-	return rv && err == nil
+	return valid && err == nil
 }
 
 // GenerateCode creates a TOTP code for the given secret and time.

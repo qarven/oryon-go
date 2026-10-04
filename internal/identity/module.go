@@ -2,6 +2,7 @@ package identity
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -47,58 +48,27 @@ type Expose struct {
 	ServiceNames []string
 }
 
+// mfaSecretLength is the required raw MFA secret size in bytes (AES-256).
+const mfaSecretLength = 32
+
+// ErrInvalidMFASecretLength is returned when the configured MFA secret
+// has an unexpected size.
+var ErrInvalidMFASecretLength = errors.New("mfa secret must be 32 bytes")
+
 func New(dep Dependency) (*Expose, error) {
-	err := dep.Validator.Validate(dep)
-	if err != nil {
-		return nil, fmt.Errorf("validate dependencies module identity: %w", err)
+	validateErr := dep.Validator.Validate(dep)
+	if validateErr != nil {
+		return nil, fmt.Errorf("validate dependencies module identity: %w", validateErr)
 	}
 
-	argon2id := hash.NewArgon2id(dep.Config.GetString("modules.identity.hash.argon2id.pepper"))
-	sha256 := hash.NewHMACSHA256(dep.Config.GetString("modules.identity.hash.hmac.secret"))
-	bcryptHash := hash.NewBcrypt(
-		dep.Config.GetInt("modules.identity.hash.bcrypt.cost"),
-		dep.Config.GetString("modules.identity.hash.bcrypt.pepper"),
-	)
+	hashers := newHashers(dep.Config)
 
-	mfaRawSecret, err := base64.StdEncoding.DecodeString(dep.Config.GetString("modules.identity.mfa.secret"))
-	if err != nil {
-		return nil, fmt.Errorf("decode mfa secret: %w", err)
-	}
-
-	if len(mfaRawSecret) != 32 { // secret must be 32 bytes (AES-256)
-		return nil, fmt.Errorf("mfa secret must be 32 bytes, got %d", len(mfaRawSecret))
-	}
-
-	mfaEncryption, err := encryption.NewAES256Encryptor(mfaRawSecret)
-	if err != nil {
-		return nil, fmt.Errorf("create mfa encryptor: %w", err)
-	}
-
-	mfaTotp := mfa.NewTOTP(
-		dep.Config.GetString("mfa.totp.issuer"),
-		dep.Config.GetUint("mfa.totp.period"),
-		dep.Config.GetUint("mfa.totp.skew"),
-		otpLib.DigitsSix,
-	)
-
-	accessJWT, err := jwt.NewHS512(jwt.Config{
-		Secret:    []byte(dep.Config.GetString("modules.identity.jwt.access.secret")),
-		Issuer:    dep.Config.GetString("modules.identity.jwt.access.issuer"),
-		Audiences: dep.Config.GetArray("modules.identity.jwt.access.audiences"),
-		TTL:       dep.Config.GetMinute("modules.identity.jwt.access.ttl"),
-		Clock:     dep.Clock,
-	})
+	mfaParts, err := newMFAComponents(dep.Config)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshJWT, err := jwt.NewHS512(jwt.Config{
-		Secret:    []byte(dep.Config.GetString("modules.identity.jwt.refresh.secret")),
-		Issuer:    dep.Config.GetString("modules.identity.jwt.refresh.issuer"),
-		Audiences: dep.Config.GetArray("modules.identity.jwt.refresh.audiences"),
-		TTL:       dep.Config.GetDay("modules.identity.jwt.refresh.ttl"),
-		Clock:     dep.Clock,
-	})
+	tokens, err := newTokenPair(dep.Config, dep.Clock)
 	if err != nil {
 		return nil, err
 	}
@@ -113,16 +83,15 @@ func New(dep Dependency) (*Expose, error) {
 		EventRepository: eventRepo,
 		Validator:       dep.Validator,
 		Config:          dep.Config,
-		Argon2ID:        argon2id,
-		SHA256:          sha256,
-		Bcrypt:          bcryptHash,
-		MfaEncryption:   mfaEncryption,
+		Argon2ID:        hashers.argon2id,
+		SHA256:          hashers.sha256,
+		MfaEncryption:   mfaParts.encryption,
 		UID:             dep.UID,
 		UUID:            dep.UUID,
-		OTP:             mfaTotp,
+		OTP:             mfaParts.totp,
 		Clock:           dep.Clock,
-		AccessJWT:       accessJWT,
-		RefreshJWT:      refreshJWT,
+		AccessJWT:       tokens.access,
+		RefreshJWT:      tokens.refresh,
 		Instrument:      dep.Instrument,
 		Goroutine:       dep.Goroutine,
 	})
@@ -134,9 +103,88 @@ func New(dep Dependency) (*Expose, error) {
 		connectrpc.WithInterceptors(dep.Interceptors...),
 	))
 
-	return &Expose{
-		ServiceNames: []string{
-			identityconnect.AuthenticationServiceName,
-		},
-	}, nil
+	serverSession := connect.NewSessionServer(service, dep.Config)
+
+	dep.Muxer.Handle(identityconnect.NewSessionServiceHandler(
+		serverSession,
+		connectrpc.WithInterceptors(dep.Interceptors...),
+	))
+
+	return &Expose{ServiceNames: []string{
+		identityconnect.AuthenticationServiceName,
+		identityconnect.SessionServiceName,
+	}}, nil
+}
+
+type passwordHashers struct {
+	argon2id hash.Hash
+	sha256   hash.Hash
+}
+
+func newHashers(cfg config.Config) passwordHashers {
+	return passwordHashers{
+		argon2id: hash.NewArgon2id(cfg.GetString("modules.identity.hash.argon2id.pepper")),
+		sha256:   hash.NewHMACSHA256(cfg.GetString("modules.identity.hash.hmac.secret")),
+	}
+}
+
+type mfaParts struct {
+	encryption encryption.Encryption
+	totp       mfa.OTP
+}
+
+func newMFAComponents(cfg config.Config) (*mfaParts, error) {
+	mfaRawSecret, err := base64.StdEncoding.DecodeString(cfg.GetString("modules.identity.mfa.secret"))
+	if err != nil {
+		return nil, fmt.Errorf("decode mfa secret: %w", err)
+	}
+
+	if len(mfaRawSecret) != mfaSecretLength {
+		return nil, fmt.Errorf("%w: got %d", ErrInvalidMFASecretLength, len(mfaRawSecret))
+	}
+
+	mfaEncryption, err := encryption.NewAES256Encryptor(mfaRawSecret)
+	if err != nil {
+		return nil, fmt.Errorf("create mfa encryptor: %w", err)
+	}
+
+	mfaTotp := mfa.NewTOTP(
+		cfg.GetString("mfa.totp.issuer"),
+		cfg.GetUint("mfa.totp.period"),
+		cfg.GetUint("mfa.totp.skew"),
+		otpLib.DigitsSix,
+	)
+
+	return &mfaParts{encryption: mfaEncryption, totp: mfaTotp}, nil
+}
+
+type tokenPair struct {
+	access  jwt.JWT
+	refresh jwt.JWT
+}
+
+func newTokenPair(cfg config.Config, clk clock.Clocker) (*tokenPair, error) {
+	accessJWT, err := jwt.NewHS512(jwt.Config{
+		Secret:    []byte(cfg.GetString("modules.identity.jwt.access.secret")),
+		Issuer:    cfg.GetString("modules.identity.jwt.access.issuer"),
+		Audiences: cfg.GetArray("modules.identity.jwt.access.audiences"),
+		TTL:       cfg.GetMinute("modules.identity.jwt.access.ttl"),
+		Clock:     clk,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	refreshJWT, err := jwt.NewHS512(jwt.Config{
+		Secret:    []byte(cfg.GetString("modules.identity.jwt.refresh.secret")),
+		Issuer:    cfg.GetString("modules.identity.jwt.refresh.issuer"),
+		Audiences: cfg.GetArray("modules.identity.jwt.refresh.audiences"),
+		TTL:       cfg.GetDay("modules.identity.jwt.refresh.ttl"),
+		Clock:     clk,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &tokenPair{access: accessJWT, refresh: refreshJWT}, nil
 }

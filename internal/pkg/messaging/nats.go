@@ -130,7 +130,8 @@ func (n *NATS) Publish(ctx context.Context, destination string, msg OutgoingMess
 
 // Consume starts consuming messages from a NATS subject.
 func (n *NATS) Consume(ctx context.Context, source string, handler Handler, opts ...ConsumeOption) error {
-	if err := ctx.Err(); err != nil {
+	err := ctx.Err()
+	if err != nil {
 		return err
 	}
 
@@ -144,16 +145,17 @@ func (n *NATS) Consume(ctx context.Context, source string, handler Handler, opts
 
 	co := newConsumeOptions(opts...)
 
-	sub, wg, msgCh, err := n.subscribeNATS(ctx, source, handler, co)
+	sub, waitGroup, msgCh, err := n.subscribeNATS(ctx, source, handler, co)
 	if err != nil {
 		return err
 	}
 
-	if err := n.addNATSSub(sub); err != nil {
+	err = n.addNATSSub(sub)
+	if err != nil {
 		uerr := sub.Drain()
 
 		close(msgCh)
-		wg.Wait()
+		waitGroup.Wait()
 
 		if uerr != nil {
 			return errors.Join(err, uerr)
@@ -162,12 +164,13 @@ func (n *NATS) Consume(ctx context.Context, source string, handler Handler, opts
 		return err
 	}
 
-	if err := n.conn.Flush(); err != nil {
+	err = n.conn.Flush()
+	if err != nil {
 		ferr := fmt.Errorf("messaging: nats flush: %w", err)
 		uerr := sub.Drain()
 
 		close(msgCh)
-		wg.Wait()
+		waitGroup.Wait()
 
 		if uerr != nil {
 			return errors.Join(ferr, uerr)
@@ -176,7 +179,7 @@ func (n *NATS) Consume(ctx context.Context, source string, handler Handler, opts
 		return ferr
 	}
 
-	return n.waitNATSConsume(ctx, sub, msgCh, wg)
+	return n.waitNATSConsume(ctx, sub, msgCh, waitGroup)
 }
 
 func (n *NATS) addNATSSub(sub *nats.Subscription) error {
@@ -192,14 +195,19 @@ func (n *NATS) addNATSSub(sub *nats.Subscription) error {
 	return nil
 }
 
-func (n *NATS) subscribeNATS(ctx context.Context, subject string, handler Handler, opts consumeOptions) (*nats.Subscription, *sync.WaitGroup, chan *nats.Msg, error) {
+func (n *NATS) subscribeNATS(
+	ctx context.Context,
+	subject string,
+	handler Handler,
+	opts consumeOptions,
+) (*nats.Subscription, *sync.WaitGroup, chan *nats.Msg, error) {
 	queueGroup := queueGroupFromConsumeOptions(opts)
 	concurrency := concurrencyOrDefault(opts.concurrency, 1)
 	autoAck := opts.autoAck
 
 	msgCh := make(chan *nats.Msg, concurrency)
 
-	var wg sync.WaitGroup
+	var waitGroup sync.WaitGroup
 
 	sub, err := n.conn.QueueSubscribe(subject, queueGroup, func(m *nats.Msg) {
 		select {
@@ -212,7 +220,7 @@ func (n *NATS) subscribeNATS(ctx context.Context, subject string, handler Handle
 	}
 
 	for range concurrency {
-		wg.Go(func() {
+		waitGroup.Go(func() {
 			for msg := range msgCh {
 				wrapped := newNATSMessage(msg, time.Now())
 				herr := callHandlerWithRecover(ctx, "nats", func() error {
@@ -228,16 +236,21 @@ func (n *NATS) subscribeNATS(ctx context.Context, subject string, handler Handle
 		})
 	}
 
-	return sub, &wg, msgCh, nil
+	return sub, &waitGroup, msgCh, nil
 }
 
-func (n *NATS) waitNATSConsume(ctx context.Context, sub *nats.Subscription, msgCh chan *nats.Msg, wg *sync.WaitGroup) error {
+func (n *NATS) waitNATSConsume(
+	ctx context.Context,
+	sub *nats.Subscription,
+	msgCh chan *nats.Msg,
+	waitGroup *sync.WaitGroup,
+) error {
 	<-ctx.Done()
 
 	uerr := sub.Drain()
 
 	close(msgCh)
-	wg.Wait()
+	waitGroup.Wait()
 
 	return errors.Join(ctx.Err(), uerr)
 }

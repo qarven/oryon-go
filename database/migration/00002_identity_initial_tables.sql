@@ -45,7 +45,7 @@ CREATE TABLE password_credentials (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-COMMENT ON COLUMN password_credentials.password IS 'Hash value using Argon2id (preferred) or bcrypt';
+COMMENT ON COLUMN password_credentials.password IS 'Hash value using Argon2id';
 
 CREATE TABLE identities (
     id BIGINT PRIMARY KEY,
@@ -156,7 +156,7 @@ CREATE TABLE backup_codes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX backup_codes_user_idx ON backup_codes(user_id);
-COMMENT ON COLUMN backup_codes.code IS 'Hash value using SHA-256 or bcrypt (preferred, since they are treated like passwords)';
+COMMENT ON COLUMN backup_codes.code IS 'Hash value using Argon2id';
 
 CREATE TABLE verification_challenges (
     id BIGINT PRIMARY KEY,
@@ -174,7 +174,7 @@ CREATE TABLE verification_challenges (
 );
 CREATE INDEX verification_challenges_user_idx ON verification_challenges(user_id);
 CREATE INDEX verification_challenges_identifier_idx ON verification_challenges(identifier, expires_at);
-COMMENT ON COLUMN verification_challenges.purpose IS '1=email_verification, 2=phone_verification, 3=password_reset, 4=mfa_verification, 5=magic_link';
+COMMENT ON COLUMN verification_challenges.purpose IS '1=email_verification, 2=phone_verification, 3=mfa_verification, 4=password_reset';
 COMMENT ON COLUMN verification_challenges.code IS 'Hash value using SHA-256 of the OTP or Magic Link token sent';
 
 CREATE TABLE security_events (

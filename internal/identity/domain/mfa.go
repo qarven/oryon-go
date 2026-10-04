@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"regexp"
 	"time"
 )
 
@@ -67,13 +68,19 @@ const (
 	TotpAlgorithmSHA512  TotpAlgorithm = 3
 )
 
+const (
+	totpAlgorithmSHA1Value   int16 = 1
+	totpAlgorithmSHA256Value int16 = 2
+	totpAlgorithmSHA512Value int16 = 3
+)
+
 func TotpAlgorithmFrom(value int16) TotpAlgorithm {
 	switch value {
-	case 1:
+	case totpAlgorithmSHA1Value:
 		return TotpAlgorithmSHA1
-	case 2:
+	case totpAlgorithmSHA256Value:
 		return TotpAlgorithmSHA256
-	case 3:
+	case totpAlgorithmSHA512Value:
 		return TotpAlgorithmSHA512
 	default:
 		return TotpAlgorithmUnknown
@@ -110,4 +117,15 @@ type BackupCode struct {
 
 func (b BackupCode) IsUsed() bool {
 	return b.UsedAt != nil
+}
+
+// backupCodePattern matches the canonical recovery code format: 16
+// alphanumeric characters in two groups of 8 separated by a hyphen
+// (e.g. Ab12Cd34-Ef56Gh78). Codes are single-use.
+var backupCodePattern = regexp.MustCompile(`^[A-Za-z0-9]{8}-[A-Za-z0-9]{8}$`)
+
+// IsValidBackupCodeFormat reports whether code uses the canonical
+// XXXXXXXX-XXXXXXXX recovery code format.
+func IsValidBackupCodeFormat(code string) bool {
+	return backupCodePattern.MatchString(code)
 }

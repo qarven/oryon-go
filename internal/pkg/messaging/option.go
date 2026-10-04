@@ -40,17 +40,17 @@ type consumeOptions struct {
 type ConsumeOption func(*consumeOptions)
 
 func newConsumeOptions(opts ...ConsumeOption) consumeOptions {
-	var co consumeOptions
+	var consumeOpts consumeOptions
 
 	for _, opt := range opts {
 		if opt == nil {
 			continue
 		}
 
-		opt(&co)
+		opt(&consumeOpts)
 	}
 
-	return co
+	return consumeOpts
 }
 
 // WithConcurrency sets how many handler goroutines process messages in parallel.
@@ -95,30 +95,30 @@ func WithMaxInFlight(maxInFlight int) ConsumeOption {
 
 // WithParams sets broker-specific parameters in bulk.
 func WithParams(params map[string]string) ConsumeOption {
-	return func(o *consumeOptions) {
+	return func(options *consumeOptions) {
 		if len(params) == 0 {
 			return
 		}
 
-		if o.params == nil {
-			o.params = make(map[string]string, len(params))
+		if options.params == nil {
+			options.params = make(map[string]string, len(params))
 		}
 
-		maps.Copy(o.params, params)
+		maps.Copy(options.params, params)
 	}
 }
 
 // WithParam sets a single broker-specific parameter.
 func WithParam(key, value string) ConsumeOption {
-	return func(o *consumeOptions) {
+	return func(options *consumeOptions) {
 		if key == "" {
 			return
 		}
 
-		if o.params == nil {
-			o.params = make(map[string]string, 1)
+		if options.params == nil {
+			options.params = make(map[string]string, 1)
 		}
 
-		o.params[key] = value
+		options.params[key] = value
 	}
 }

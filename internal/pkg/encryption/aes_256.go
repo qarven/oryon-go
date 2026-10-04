@@ -70,7 +70,9 @@ func (e *AES256Encryptor) Encrypt(plaintext []byte) ([]byte, error) {
 	}
 
 	nonce := make([]byte, gcmNonceSize)
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+
+	_, err = io.ReadFull(rand.Reader, nonce)
+	if err != nil {
 		return nil, err
 	}
 

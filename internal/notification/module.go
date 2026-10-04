@@ -18,7 +18,6 @@ import (
 )
 
 type Dependency struct {
-	Ctx        context.Context
 	DBConn     *pgxpool.Pool
 	Messaging  messaging.Messaging
 	Config     config.Config
@@ -33,7 +32,7 @@ type Dependency struct {
 
 type Expose struct{}
 
-func New(dep Dependency) (*Expose, error) {
+func New(ctx context.Context, dep Dependency) (*Expose, error) {
 	err := dep.Validator.Validate(dep)
 	if err != nil {
 		return nil, fmt.Errorf("validate dependencies module notification: %w", err)
@@ -41,8 +40,7 @@ func New(dep Dependency) (*Expose, error) {
 
 	service := application.New(application.Dependency{})
 
-	mq.RegisterConsumer(mq.Dependency{
-		Ctx:       dep.Ctx,
+	mq.RegisterConsumer(ctx, mq.Dependency{
 		Config:    dep.Config,
 		Goroutine: dep.Goroutine,
 		Messaging: dep.Messaging,

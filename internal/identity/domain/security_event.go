@@ -9,12 +9,14 @@ const (
 	SecurityEventTypeLoginSuccess               SecurityEventType = "login.success"
 	SecurityEventTypeLoginFailed                SecurityEventType = "login.failed"
 	SecurityEventTypeLoginMFARequired           SecurityEventType = "login.mfa_required"
+	SecurityEventTypeLogoutSuccess              SecurityEventType = "logout.success"
 	SecurityEventTypeEmailVerificationRequested SecurityEventType = "email.verification_requested"
 	SecurityEventTypePhoneVerificationRequested SecurityEventType = "phone.verification_requested"
 	SecurityEventTypeEmailVerified              SecurityEventType = "email.verified"
 	SecurityEventTypeRegistrationRequested      SecurityEventType = "registration.requested"
 	SecurityEventTypeRegistrationCompleted      SecurityEventType = "registration.completed"
 	SecurityEventTypePasswordResetRequested     SecurityEventType = "password.reset_requested"
+	SecurityEventTypePasswordResetCompleted     SecurityEventType = "password.reset_completed"
 	SecurityEventTypeMFAVerificationRequested   SecurityEventType = "mfa.verification_requested"
 )
 

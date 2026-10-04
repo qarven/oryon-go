@@ -31,6 +31,14 @@ const (
 	UserStatusDeleted UserStatus = 5
 )
 
+const (
+	userStatusActiveValue    int16 = 1
+	userStatusInactiveValue  int16 = 2
+	userStatusLockedValue    int16 = 3
+	userStatusSuspendedValue int16 = 4
+	userStatusDeletedValue   int16 = 5
+)
+
 func (s UserStatus) IsValid() bool {
 	switch s {
 	case UserStatusActive,
@@ -51,15 +59,15 @@ func (s UserStatus) CanAuthenticate() bool {
 func (s UserStatus) Value() int16 {
 	switch s {
 	case UserStatusActive:
-		return 1
+		return userStatusActiveValue
 	case UserStatusInactive:
-		return 2
+		return userStatusInactiveValue
 	case UserStatusLocked:
-		return 3
+		return userStatusLockedValue
 	case UserStatusSuspended:
-		return 4
+		return userStatusSuspendedValue
 	case UserStatusDeleted:
-		return 5
+		return userStatusDeletedValue
 	default:
 		return 0
 	}

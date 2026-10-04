@@ -53,6 +53,9 @@ test-real: ## Run real tests under ./tests/real.
 	@go test -count=1 ./tests/... -parallel 4 -v
 
 lint: ## Lint the codebase with golangci-lint.
+	@gofmt -w .
+	@go fix ./...
+	@go vet ./...
 	@golangci-lint run --fix
 
 ## ***** ***** ***** ***** ***** ***** ***** ***** ***** *****

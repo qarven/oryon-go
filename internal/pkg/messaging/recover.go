@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"runtime/debug"
@@ -9,7 +10,9 @@ import (
 	"github.com/qarven/oryon-go/internal/pkg/stacktrace"
 )
 
-func callHandlerWithRecover(ctx context.Context, kind string, fn func() error) (err error) {
+var ErrHandlerPanic = errors.New("pkgmessage: panic in handler")
+
+func callHandlerWithRecover(ctx context.Context, kind string, operation func() error) (err error) {
 	defer func() {
 		if rvr := recover(); rvr != nil {
 			stack := debug.Stack()
@@ -21,9 +24,9 @@ func callHandlerWithRecover(ctx context.Context, kind string, fn func() error) (
 				slog.ErrorContext(ctx, "panic in messaging handler", "kind", kind, "panic", rvr, "stack", paths)
 			}
 
-			err = fmt.Errorf("pkgmessage: panic in %s handler: %v", kind, rvr)
+			err = fmt.Errorf("%w: %s: %v", ErrHandlerPanic, kind, rvr)
 		}
 	}()
 
-	return fn()
+	return operation()
 }

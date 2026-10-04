@@ -22,6 +22,9 @@ var (
 // ErrTranslatorNotFound indicates the requested translator is unavailable.
 var ErrTranslatorNotFound = errors.New("translator not found")
 
+// ErrValidation indicates a validation failure.
+var ErrValidation = errors.New("validation error")
+
 // V10Validator implements Validator using go-playground/validator v10.
 type V10Validator struct {
 	validate   *validator.Validate
@@ -90,7 +93,7 @@ func (v *V10Validator) Validate(data any) error {
 
 		for _, fe := range validateErrs {
 			// errV10[strcase.ToLowerSnake(fe.Field())] = fe.Translate(v.translator)
-			return fmt.Errorf("validation error: %s", fe.Translate(v.translator))
+			return fmt.Errorf("%w: %s", ErrValidation, fe.Translate(v.translator))
 		}
 
 		return errV10

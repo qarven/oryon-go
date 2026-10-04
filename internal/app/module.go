@@ -33,8 +33,7 @@ func (a *App) initModules() {
 	}
 
 	if a.config.GetBool("modules.notification.enabled") {
-		_, err := notification.New(notification.Dependency{
-			Ctx:        a.ctx,
+		_, err := notification.New(a.ctx, notification.Dependency{
 			DBConn:     a.dbConn,
 			Messaging:  a.messaging,
 			Config:     a.config,

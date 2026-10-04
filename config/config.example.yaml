@@ -46,10 +46,12 @@ app:
     public:
       [
         "/oryon.identity.v1.AuthenticationService/Registration",
+        "/oryon.identity.v1.AuthenticationService/CompleteRegistration",
+        "/oryon.identity.v1.AuthenticationService/ResendRegistrationCode",
         "/oryon.identity.v1.AuthenticationService/Login",
         "/oryon.identity.v1.AuthenticationService/RefreshToken",
-        "/oryon.identity.v1.AuthenticationService/RequestEmailVerification",
-        "/oryon.identity.v1.AuthenticationService/VerifyEmail",
+        "/oryon.identity.v1.AuthenticationService/CompleteLoginMfa",
+        "/oryon.identity.v1.SessionService/Logout",
       ]
 
 # =============================================================================
@@ -95,25 +97,25 @@ instrument:
   # List of sensitive fields to be masked in logs
   # Any occurrence of these keys will be replaced with "***"
   # Helps prevent credential leakage in logs
-log_mask_fields:
-  [
-    "code",
-    "cookie",
-    "password",
-    "newPassword",
-    "authorization",
-    "accessToken",
-    "access_token",
-    "refreshToken",
-    "refresh_token",
-    "new_password",
-    "currentPassword",
-    "current_password",
-    "challengeToken",
-    "challenge_token",
-    "recoveryCodes",
-    "recovery_codes",
-  ]
+  log_mask_fields:
+    [
+      "code",
+      "cookie",
+      "password",
+      "newPassword",
+      "authorization",
+      "accessToken",
+      "access_token",
+      "refreshToken",
+      "refresh_token",
+      "new_password",
+      "currentPassword",
+      "current_password",
+      "challengeToken",
+      "challenge_token",
+      "recoveryCodes",
+      "recovery_codes",
+    ]
 
 # =============================================================================
 # Database Configuration
@@ -280,13 +282,6 @@ modules:
         # Pepper added to password before hashing
         pepper: "secret"
 
-      bcrypt:
-        # Cost factor (higher = slower & more secure)
-        cost: 12
-
-        # Pepper added to password before hashing
-        pepper: "secret"
-
     # JWT (Authentication Token) Configuration
     jwt:
       access:
@@ -327,5 +322,4 @@ modules:
       [
         "identity.registration.notification",
         "identity.password_reset.notification",
-        "identity.mfa_verification.notification",
       ]

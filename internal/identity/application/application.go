@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"regexp"
 	"time"
 
 	"github.com/qarven/oryon-go/internal/identity/domain"
@@ -18,60 +17,75 @@ import (
 	"github.com/qarven/oryon-go/internal/pkg/validator"
 )
 
-var rePhone = regexp.MustCompile(`^\+[1-9]\d{1,14}$`)
-var reUsername = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{2,19}$`)
-
-type Repository interface {
+// TxRepository groups multi-row atomic writes. Each method runs in a single
+// Postgres transaction: on error nothing is persisted, so callers must pass
+// fully validated domain objects and not retry blindly on unique violations.
+type TxRepository interface {
 	CreateRegistrationFlow(ctx context.Context, flow domain.AuthFlow, challenges []domain.VerificationChallenge) error
 	CompleteRegistration(ctx context.Context, data CompleteRegistrationData) error
-	ResendVerificationChallenge(ctx context.Context, data ResendVerificationChallengeData) error
-	CreateFlowWithChallenge(ctx context.Context, flow domain.AuthFlow, challenge domain.VerificationChallenge) error
+	ResendRegistrationCode(ctx context.Context, challenges []domain.VerificationChallenge) error
 	RotateRefreshToken(ctx context.Context, data RotateRefreshTokenData) error
+	RevokeSession(ctx context.Context, data RevokeSessionData) error
 	CreateLoginSession(ctx context.Context, data CreateLoginSessionData) error
 	CompleteMfaLogin(ctx context.Context, data CompleteMfaLoginData) error
+	CreatePasswordResetChallenge(ctx context.Context, challenge domain.VerificationChallenge) error
+	CompletePasswordReset(ctx context.Context, data CompletePasswordResetData) error
+}
 
+// GetUserRepository groups point lookups for single-row.
+//
+//nolint:interfacebloat // ignore for interface has more than 10 methods
+type GetUserRepository interface {
 	GetUserByID(ctx context.Context, id int64) (*domain.User, error)
 	GetUserByUsername(ctx context.Context, username string) (*domain.User, error)
 	GetUserEmailByEmail(ctx context.Context, email string) (*domain.UserEmail, error)
-	GetPrimaryUserEmailByUserID(ctx context.Context, userID int64) (*domain.UserEmail, error)
 	GetUserPhoneByPhone(ctx context.Context, phone string) (*domain.UserPhoneNumber, error)
+	GetPrimaryUserEmailByUserID(ctx context.Context, userID int64) (*domain.UserEmail, error)
 	GetPasswordCredentialByUserID(ctx context.Context, userID int64) (*domain.PasswordCredential, error)
 	GetSessionByID(ctx context.Context, id int64) (*domain.Session, error)
 	GetRefreshTokenByHash(ctx context.Context, hash []byte) (*domain.RefreshToken, error)
 	GetAuthFlowByID(ctx context.Context, id int64) (*domain.AuthFlow, error)
 	GetTotpFactorByFactorID(ctx context.Context, factorID int64) (*domain.TotpFactor, error)
+	GetVerificationChallengeByID(ctx context.Context, id int64) (*domain.VerificationChallenge, error)
+}
 
+// ListRepository groups collection queries. Empty results are returned as empty slices.
+type ListRepository interface {
 	ListMfaFactorsByUserID(ctx context.Context, userID int64, includeRevoked bool) ([]domain.MfaFactor, error)
 	ListBackupCodesByUserID(ctx context.Context, userID int64) ([]domain.BackupCode, error)
+	ListPendingChallengesByIdentifier(
+		ctx context.Context,
+		identifier string,
+		purpose domain.VerificationPurpose,
+	) ([]domain.VerificationChallenge, error)
+}
 
+// CreateRepository groups single-row, non-transactional inserts.
+type CreateRepository interface {
 	CreateAuthFlow(ctx context.Context, flow domain.AuthFlow) error
 	CreateSecurityEvent(ctx context.Context, ev domain.SecurityEvent) error
-	CreateVerificationChallenge(ctx context.Context, vc domain.VerificationChallenge) error
-	GetVerificationChallengeByID(ctx context.Context, id int64) (*domain.VerificationChallenge, error)
-	ListPendingChallengesByIdentifier(ctx context.Context, identifier string, purpose domain.VerificationPurpose) ([]domain.VerificationChallenge, error)
+}
+
+// UpdateRepository groups single-row, non-transactional mutations.
+type UpdateRepository interface {
 	UpdateVerificationChallenge(ctx context.Context, vc domain.VerificationChallenge) error
+}
+
+type Repository interface {
+	TxRepository
+	GetUserRepository
+	ListRepository
+	CreateRepository
+	UpdateRepository
 }
 
 type CacheRepository interface {
 	IncrementVerificationRequest(ctx context.Context, key string, window time.Duration) (int64, error)
-	// Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
-	// Get(ctx context.Context, key string) ([]byte, error)
-	// Delete(ctx context.Context, key string) error
-	// Exists(ctx context.Context, key string) (bool, error)
-	// IncrWithTTL(ctx context.Context, key string, ttl time.Duration) (int64, error)
-	// SetNX(ctx context.Context, key string, value []byte, ttl time.Duration) (bool, error)
-	// StorePasskeyChallenge(ctx context.Context, ch domain.PasskeyChallenge) error
-	// GetPasskeyChallenge(ctx context.Context, flowID int64) (*domain.PasskeyChallenge, error)
-	// DeletePasskeyChallenge(ctx context.Context, flowID int64) error
-	// CheckVerificationRateLimit(ctx context.Context, identifier string) (bool, error)
-	// IncrementVerificationAttempt(ctx context.Context, identifier string) error
-	// ResetVerificationAttempts(ctx context.Context, identifier string) error
 }
 
 type EventRepository interface {
 	PublishEventRegistration(ctx context.Context, data EventRegistrationData) error
 	PublishEventPasswordReset(ctx context.Context, data EventPasswordResetData) error
-	PublishEventMFAVerification(ctx context.Context, data EventMFAVerificationData) error
 }
 
 type Dependency struct {
@@ -82,7 +96,6 @@ type Dependency struct {
 	Config          config.Config
 	Argon2ID        hash.Hash
 	SHA256          hash.Hash
-	Bcrypt          hash.Hash
 	MfaEncryption   encryption.Encryption
 	UID             uid.NumberID
 	UUID            uid.StringID
@@ -102,7 +115,6 @@ type Application struct {
 	config        config.Config
 	argon2id      hash.Hash
 	sha256        hash.Hash
-	bcrypt        hash.Hash
 	mfaEncryption encryption.Encryption
 	uid           uid.NumberID
 	uuid          uid.StringID
@@ -122,7 +134,6 @@ func New(dep Dependency) *Application {
 		validator:     dep.Validator,
 		argon2id:      dep.Argon2ID,
 		sha256:        dep.SHA256,
-		bcrypt:        dep.Bcrypt,
 		mfaEncryption: dep.MfaEncryption,
 		config:        dep.Config,
 		uid:           dep.UID,

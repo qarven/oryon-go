@@ -50,6 +50,11 @@ FROM password_credentials
 WHERE user_id = @user_id
 LIMIT 1;
 
+-- name: UpdatePasswordCredential :exec
+UPDATE password_credentials
+SET password = @password, password_changed_at = @password_changed_at, updated_at = @updated_at
+WHERE user_id = @user_id;
+
 -- name: GetAuthFlowByID :one
 SELECT id, user_id, flow_type, flow_state, ip_address, user_agent, context, created_at, expires_at, completed_at
 FROM auth_flows
@@ -74,6 +79,9 @@ LIMIT 1;
 UPDATE sessions SET last_seen_at = @last_seen_at, mfa_verified_at = @mfa_verified_at, revoked_at = @revoked_at, expires_at = @expires_at
 WHERE id = @id;
 
+-- name: RevokeSession :exec
+UPDATE sessions SET revoked_at = @revoked_at WHERE id = @id;
+
 -- name: CreateRefreshToken :exec
 INSERT INTO refresh_tokens (id, session_id, token, issued_at, expires_at, created_ip)
 VALUES (@id, @session_id, @token, @issued_at, @expires_at, @created_ip);
@@ -86,6 +94,9 @@ LIMIT 1;
 
 -- name: UpdateRefreshToken :exec
 UPDATE refresh_tokens SET revoked_at = @revoked_at, replaced_by = @replaced_by WHERE id = @id;
+
+-- name: RevokeRefreshToken :exec
+UPDATE refresh_tokens SET revoked_at = @revoked_at WHERE id = @id;
 
 -- name: GetTotpFactorByFactorID :one
 SELECT factor_id, secret, algorithm, digits, period, created_at

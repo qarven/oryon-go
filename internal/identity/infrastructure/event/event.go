@@ -10,9 +10,8 @@ import (
 )
 
 const (
-	identityRegistration    = "identity.registration"
-	identityPasswordReset   = "identity.password_reset"
-	identityMFAVerification = "identity.mfa_verification"
+	identityRegistration  = "identity.registration"
+	identityPasswordReset = "identity.password_reset"
 )
 
 type Event struct {
@@ -33,10 +32,6 @@ func (e *Event) PublishEventRegistration(ctx context.Context, data application.E
 
 func (e *Event) PublishEventPasswordReset(ctx context.Context, data application.EventPasswordResetData) error {
 	return e.publish(ctx, identityPasswordReset, data)
-}
-
-func (e *Event) PublishEventMFAVerification(ctx context.Context, data application.EventMFAVerificationData) error {
-	return e.publish(ctx, identityMFAVerification, data)
 }
 
 func (e *Event) publish(ctx context.Context, subject string, data any) error {

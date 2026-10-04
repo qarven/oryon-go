@@ -123,13 +123,14 @@ func (m *natsMessage) Metadata() map[string]any {
 		"reply": m.msg.Reply,
 	}
 
-	if md, err := m.msg.Metadata(); err == nil && md != nil {
-		meta["sequence_stream"] = md.Sequence.Stream
-		meta["sequence_consumer"] = md.Sequence.Consumer
-		meta["num_delivered"] = md.NumDelivered
-		meta["num_pending"] = md.NumPending
-		meta["timestamp"] = md.Timestamp
-		meta["domain"] = md.Domain
+	msgMeta, err := m.msg.Metadata()
+	if err == nil && msgMeta != nil {
+		meta["sequence_stream"] = msgMeta.Sequence.Stream
+		meta["sequence_consumer"] = msgMeta.Sequence.Consumer
+		meta["num_delivered"] = msgMeta.NumDelivered
+		meta["num_pending"] = msgMeta.NumPending
+		meta["timestamp"] = msgMeta.Timestamp
+		meta["domain"] = msgMeta.Domain
 	}
 
 	return meta

@@ -11,14 +11,13 @@ import (
 )
 
 type Dependency struct {
-	Ctx       context.Context
 	Config    config.Config
 	Goroutine *goroutine.Manager
 	Messaging messaging.Messaging
 	Service   NotificationService
 }
 
-func RegisterConsumer(dep Dependency) {
+func RegisterConsumer(ctx context.Context, dep Dependency) {
 	mqHandler := &MQHandler{service: dep.Service}
 
 	consumerNames := dep.Config.GetArray("modules.notification.consumers")
@@ -38,16 +37,11 @@ func RegisterConsumer(dep Dependency) {
 			consumerName: identityPasswordResetConsumer,
 			handler:      mqHandler.PasswordResetConsumer,
 		},
-		{
-			source:       identityMFAVerificationSource,
-			consumerName: identityMFAVerificationConsumer,
-			handler:      mqHandler.MFAVerificationConsumer,
-		},
 	}
 
 	for _, job := range jobs {
 		if len(consumerNames) > 0 && slices.Contains(consumerNames, job.consumerName) {
-			dep.Goroutine.Go(dep.Ctx, func(ctx context.Context) error {
+			dep.Goroutine.Go(ctx, func(ctx context.Context) error {
 				slog.InfoContext(ctx, "Running job for handling consumer", "consumer", job.consumerName)
 
 				return dep.Messaging.Consume(ctx, job.source, job.handler,

@@ -11,8 +11,8 @@ const (
 	VerificationPurposeUnknown           VerificationPurpose = 0
 	VerificationPurposeEmailVerification VerificationPurpose = 1
 	VerificationPurposePhoneVerification VerificationPurpose = 2
-	VerificationPurposePasswordReset     VerificationPurpose = 3
-	VerificationPurposeMFAVerification   VerificationPurpose = 4
+	VerificationPurposeMFAVerification   VerificationPurpose = 3
+	VerificationPurposePasswordReset     VerificationPurpose = 4
 )
 
 func (p VerificationPurpose) IsValid() bool {
@@ -50,15 +50,15 @@ var (
 	ErrIdentifierConflict           = errors.New("identifier already registered")
 )
 
-func (v VerificationChallenge) IsExpired(now time.Time) bool {
+func (v *VerificationChallenge) IsExpired(now time.Time) bool {
 	return now.After(v.ExpiresAt)
 }
 
-func (v VerificationChallenge) IsConsumed() bool {
+func (v *VerificationChallenge) IsConsumed() bool {
 	return v.ConsumedAt != nil
 }
 
-func (v VerificationChallenge) IsAttemptsExceeded() bool {
+func (v *VerificationChallenge) IsAttemptsExceeded() bool {
 	return v.Attempts >= v.MaxAttempts
 }
 
@@ -77,7 +77,7 @@ func (v *VerificationChallenge) Consume(now time.Time) error {
 	return nil
 }
 
-func (v VerificationChallenge) CanAttempt(now time.Time) error {
+func (v *VerificationChallenge) CanAttempt(now time.Time) error {
 	if v.IsConsumed() {
 		return ErrVerificationConsumed
 	}

@@ -1,0 +1,23 @@
+assert_lefthook_installed: true
+min_version: 2.1.16
+
+pre-commit:
+  piped: true
+  commands:
+    fmt:
+      glob: "*.go"
+      run: gofmt -w {staged_files}
+      stage_fixed: true
+
+    vet:
+      glob: "*.go"
+      run: go vet ./...
+
+    lint:
+      glob: "*.go"
+      run: golangci-lint run
+
+pre-push:
+  commands:
+    test:
+      run: go test ./...

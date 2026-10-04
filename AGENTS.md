@@ -1,55 +1,119 @@
-# AGENTS.md
+# Project Instructions
 
-## Stack & Entrypoint
-- Go `1.27` (`go.mod:3`), module `github.com/qarven/oryon-go`. Single service, not a monorepo.
-- Entrypoint `main.go:25` → `internal/app.New()` → `Start()`/`Stop()`. Wiring order in `internal/app/app.go:60`: config → instrument → libraries → JWT → db → cache → mail → middleware → modules → httpServer → closers.
-- API is **ConnectRPC** (not plain net/http REST). Proto/handlers from external `github.com/qarven/mono/gen/go/oryon/identity/v1/identityconnect` (`internal/identity/module.go:9`). Swagger is secondary, generated via `swag`.
+This repository is a Go project. Follow standard Go conventions and keep implementations simple, idiomatic, testable, and maintainable.
 
-## Config / Env
-- `CONFIG_PATH` overrides everything; else `/config/config.yaml` (prod). `LOCAL=true` switches to `./config/config.yaml` (`internal/app/initiate.go:32`).
-- `config/` is gitignored except `config.example.yaml`. Always `cp config/config.example.yaml config/config.yaml` before first run.
-- `Makefile:3` does `-include .env` + `export` — `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB` must be in `.env` or shell for `migrate-*`/`seed-*`. Example `.env` + `compose.yaml` use `DB=oryon`; `README` still says `gobite` (stale).
-- JWT secrets are base64 64-byte values; `config.example.yaml` placeholder is **not** valid base64 — generate with `openssl rand -base64 64` or lint/init will fail.
-- Viper watches config file with `fsnotify` and hot-reloads (`internal/pkg/config/viper.go:45`).
+## Go Version
 
-## Run & Compose
-- Deps: `podman-compose up -d` (not `docker compose`). No app container — run Go locally. Services: Postgres `18-alpine:5432`, Redis `8.10:6379`, Mailpit `1025/8025`, OTEL collector `4317/4318`, Tempo/Prometheus/Loki.
-- `make run` uses `reflex` (`Makefile:44`): `reflex -r '\.go$' -s -R 'config|database|deploy|docs' -- sh -c "LOCAL=true go run main.go"`. Requires `reflex` installed.
-- `LOCAL=true go run main.go` for direct run.
-- `make restart` is **destructive**: `podman-compose down -v` wipes volumes, then `migrate-up`, `seed-up`, `gen-sql`, `gen-api`, `go mod tidy`, `gofmt -w .`.
+- Use the Go version specified in `go.mod`.
+- Do not introduce APIs or language features newer than the project's declared Go version without explicit approval.
 
-## Database & Codegen
-- Migrations: `goose -dir database/migration` against `postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:5432/$POSTGRES_DB?sslmode=disable` (`Makefile:63`). Rollback is one step (`down`).
-- Seeds: `goose -dir database/seed -table "goose_seed_db_version"` — separate tracking table (`Makefile:74`).
-- `make gen-sql` → `sqlc generate` per `sqlc.yaml`: `database/query` + `database/migration` → `internal/pkg/sqlc` with `sql_package: pgx/v5`. Never hand-edit `internal/pkg/sqlc/*`.
-- `make gen-api` → `swag init --v3.1 -o api` from `main.go` annotations. Output `api/swagger.{json,yaml}`, `api/docs.go` are generated.
+## Project Structure
 
-## Make Targets
-- `make test` → `go test ./internal/...`
-- `make test-race` → `go test -race ./internal/...`
-- `make test-real` → `go test -count=1 ./tests/... -parallel 4 -v` (currently no `tests/` dir — will fail if run prematurely)
-- `make lint` → `golangci-lint run --fix` (version 2, 5m timeout, `modules-download-mode: readonly`)
-- `make compose-up` / `compose-down` wraps `podman-compose`.
+Follow the existing repository structure. Do not reorganize packages unless necessary.
 
-## Lint Gotchas (`.golangci.yaml`)
-- `tests: false` — test files not linted. `allow-parallel-runners: true`.
-- `nolintlint` requires both explanation and specific linter (`require-explanation: true`, `require-specific: true`).
-- `tagliatelle` enforces `json: snake` — JSON tags must be snake_case.
-- `gosec` excludes `G115` (int conversions). `ireturn` allows `instrument.Instrumentation`, `trace.Tracer`, `metric.Meter`.
-- `gocritic`, `wsl_v5`, `cyclop`/`gocyclo`/`gocognit` with max 20 complexity — expect style churn on `make lint --fix`.
+```bash
+.
+├── api
+├── config
+├── database
+│   ├── migration
+│   ├── query
+│   └── seed
+├── deploy
+├── docs
+└── internal
+    ├── app
+    ├── identity
+    │   ├── application
+    │   ├── domain
+    │   ├── infrastructure
+    │   │   ├── cache
+    │   │   │   └── redis
+    │   │   ├── event
+    │   │   └── persistence
+    │   │       └── postgres
+    │   └── presentation
+    │       └── connect
+    ├── notification
+    │   ├── application
+    │   ├── domain
+    │   ├── infrastructure
+    │   │   ├── email
+    │   │   ├── persistence
+    │   │   │   └── postgres
+    │   │   └── sms
+    │   └── presentation
+    │       └── mq
+    └── pkg
+        ├── clock
+        ├── config
+        └── ...
+```
 
-## Architecture
-- `internal/app/` owns lifecycle; `internal/identity/` follows `domain/`/`application/`/`infrastructure/{cache,persistence}/`/`presentation/connect/` (`internal/identity/module.go:42` → `persistence.NewPostgres` + `cache.NewRedis` → `application.New` → `connect.NewAuthenticationServer/NewUserServer`).
-- `internal/pkg/` shared libs: `config`, `instrument` (OTEL), `jwt` (HS512), `hash` (hmac/argon2id/bcrypt), `middleware` (Connect interceptors), `validator` (go-playground), `uid` (snowflake/uuid), `clock`, `goroutine`, `mail`, `sqlc`.
-- Interceptor order in `initMiddleware()` matters: `Recovery → Maintenance → Observability → Error → Authentication` (`internal/app/initiate.go:200`).
-- Public/maintenance endpoints are exact Connect procedure strings (e.g. `/oryon.identity.v1.AuthenticationService/Login`) from `config.example.yaml:39,46`.
+## Go Style
 
-## Tests & Verification
-- No `tests/` dir committed; integration suite (`test-real`) needs running Postgres/Redis. Prefer `make test` / `go test ./internal/pkg/...` for focused runs.
-- Single package: `go test ./internal/identity/... -run TestName -v` or `go test -run TestFoo ./internal/pkg/jwt -v`.
-- Always run `gofmt -w .` and `make lint` before PR (per `README:122`).
+- Write idiomatic Go.
+- Run `gofmt` on changed Go files.
+- Prefer short, clear functions.
+- Avoid unnecessary abstractions.
+- Prefer composition over inheritance.
+- Use interfaces only when they provide a concrete benefit.
+- Keep interfaces small.
+- Return errors explicitly.
+- Avoid panic for normal application errors.
+- Do not use `interface{}` when a more specific type is appropriate; use `any` when an empty interface is actually required.
+- Use meaningful names. Avoid unnecessary abbreviations.
+- Follow standard Go naming conventions:
+    - MixedCaps for exported identifiers.
+    - mixedCaps for unexported identifiers.
+    - Initialisms should remain capitalized, e.g. HTTP, URL, ID, API.
 
-## Conventions
-- Commit `api/swagger.*` and `internal/pkg/sqlc/*` when you change migrations/queries or `main.go` swagger annotations.
-- `config/config.yaml` is local-only — never commit secrets.
-- Branch/PR: short description + test evidence per `README:120`.
+## Packages
+- Keep packages focused on a single responsibility.
+- Avoid circular dependencies.
+- Avoid package names such as `utils`, `helpers`, or `common` unless the package has a clear, cohesive purpose.
+- Keep implementation details private unless they are part of the package's intended API.
+
+## Formatting and Static Analysis
+
+Before completing a change, run:
+
+- `gofmt -w .`
+- `go vet ./...`
+- `go test ./...`
+
+If the repository uses additional tooling such as `golangci-lint`, `staticcheck`, or `goimports`, follow the existing project configuration.
+
+Do not introduce a new formatter or linter configuration without a reason.
+
+## Dependencies
+
+- Prefer the standard library when it is sufficient.
+- Do not add dependencies for trivial functionality.
+- Before adding a dependency, check whether an existing dependency already solves the problem.
+- Keep `go.mod` and `go.sum` consistent.
+- Avoid upgrading unrelated dependencies.
+- Use: `go mod tidy`
+
+only when dependency changes require it or when explicitly requested.
+
+## Generated Code
+- Do not manually modify generated files unless explicitly required.
+- Follow the repository's generation commands.
+- If generated code changes, include the source/configuration changes that caused it when appropriate.
+
+## Before Finishing a Task
+- Review the changed files.
+- Remove unused code and unnecessary changes.
+- Run `gofmt`.
+- Run relevant tests.
+- Run `go vet ./...` when practical.
+- Check for accidental changes to generated files, dependencies, or configuration.
+- Ensure no secrets or sensitive data were added.
+- Keep the final change focused on the requested task.
+
+## General Principle
+
+Prefer the simplest idiomatic Go solution that satisfies the requirement.
+
+Before introducing abstraction, ask whether a small function, struct, interface, or package is sufficient. Optimize for readability and maintainability first.

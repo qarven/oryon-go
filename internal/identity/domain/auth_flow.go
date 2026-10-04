@@ -21,6 +21,13 @@ const (
 	AuthFlowTypeStepUpMFA    AuthFlowType = 4
 )
 
+const (
+	authFlowTypeRegistrationValue int16 = 1
+	authFlowTypeLoginValue        int16 = 2
+	authFlowTypeRecoveryValue     int16 = 3
+	authFlowTypeStepUpMFAValue    int16 = 4
+)
+
 func (t AuthFlowType) IsValid() bool {
 	switch t {
 	case AuthFlowTypeRegistration,
@@ -36,13 +43,13 @@ func (t AuthFlowType) IsValid() bool {
 func (t AuthFlowType) Value() int16 {
 	switch t {
 	case AuthFlowTypeRegistration:
-		return 1
+		return authFlowTypeRegistrationValue
 	case AuthFlowTypeLogin:
-		return 2
+		return authFlowTypeLoginValue
 	case AuthFlowTypeRecovery:
-		return 3
+		return authFlowTypeRecoveryValue
 	case AuthFlowTypeStepUpMFA:
-		return 4
+		return authFlowTypeStepUpMFAValue
 	default:
 		return 0
 	}
@@ -58,6 +65,14 @@ const (
 	AuthFlowStatePendingVerification AuthFlowState = 4
 	AuthFlowStateCompleted           AuthFlowState = 5
 	AuthFlowStateFailed              AuthFlowState = 6
+)
+
+const (
+	authFlowStatePendingIdentifierValue   int16 = 1
+	authFlowStatePendingPasswordValue     int16 = 2
+	authFlowStatePendingMFAValue          int16 = 3
+	authFlowStatePendingVerificationValue int16 = 4
+	authFlowStateCompletedValue           int16 = 5
 )
 
 func (s AuthFlowState) IsValid() bool {
@@ -77,17 +92,17 @@ func (s AuthFlowState) IsValid() bool {
 func (s AuthFlowState) Value() int16 {
 	switch s {
 	case AuthFlowStatePendingIdentifier:
-		return 1
+		return authFlowStatePendingIdentifierValue
 	case AuthFlowStatePendingPassword:
-		return 2
+		return authFlowStatePendingPasswordValue
 	case AuthFlowStatePendingMFA:
-		return 3
+		return authFlowStatePendingMFAValue
 	case AuthFlowStatePendingVerification:
-		return 4
+		return authFlowStatePendingVerificationValue
 	case AuthFlowStateCompleted:
-		return 5
+		return authFlowStateCompletedValue
 	case AuthFlowStateFailed:
-		return 5
+		return authFlowStateCompletedValue
 	default:
 		return 0
 	}

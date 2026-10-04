@@ -13,25 +13,34 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type AuthenticationService interface {
+type registerService interface {
 	Registration(ctx context.Context, input application.RegistrationInput) (*application.RegistrationOutput, error)
-	CompleteRegistration(ctx context.Context, input application.CompleteRegistrationInput) (*application.CompleteRegistrationOutput, error)
+	CompleteRegistration(ctx context.Context, input application.CompleteRegistrationInput) (
+		*application.CompleteRegistrationOutput, error)
+	ResendRegistrationCode(ctx context.Context, input application.ResendRegistrationCodeInput) (
+		*application.ResendRegistrationCodeOutput, error)
+}
 
+type loginService interface {
 	Login(ctx context.Context, input application.LoginInput) (*application.LoginOutput, error)
 	RefreshToken(ctx context.Context, input application.RefreshTokenInput) (*application.RefreshTokenOutput, error)
-	CompleteMfa(ctx context.Context, input application.CompleteMfaInput) (*application.CompleteMfaOutput, error)
+	CompleteLoginMfa(ctx context.Context, input application.CompleteLoginMfaInput) (
+		*application.CompleteLoginMfaOutput, error)
+}
 
-	// ChangePassword(ctx context.Context, input application.ChangePasswordInput) (*application.ChangePasswordOutput, error)
-	// RequestPasswordReset(ctx context.Context, input application.RequestPasswordResetInput) (*application.RequestPasswordResetOutput, error)
-	// ConfirmPasswordReset(ctx context.Context, input application.ConfirmPasswordResetInput) (*application.ConfirmPasswordResetOutput, error)
+type passwordResetService interface {
+	InitiatePasswordReset(ctx context.Context, input application.InitiatePasswordResetInput) (
+		*application.InitiatePasswordResetOutput, error)
+	CompletePasswordReset(ctx context.Context, input application.CompletePasswordResetInput) (
+		*application.CompletePasswordResetOutput, error)
+	ResendPasswordResetCode(ctx context.Context, input application.ResendPasswordResetCodeInput) (
+		*application.ResendPasswordResetCodeOutput, error)
+}
 
-	InitiateVerification(ctx context.Context, input application.InitiateVerificationInput) (*application.InitiateVerificationOutput, error)
-	// VerifyEmail(ctx context.Context, input application.VerifyEmailInput) (*application.VerifyEmailOutput, error)
-
-	// BeginPasskeyRegistration(ctx context.Context, input application.BeginPasskeyRegistrationInput) (*application.BeginPasskeyRegistrationOutput, error)
-	// FinishPasskeyRegistration(ctx context.Context, input application.FinishPasskeyRegistrationInput) (*application.FinishPasskeyRegistrationOutput, error)
-	// BeginPasskeyLogin(ctx context.Context, input application.BeginPasskeyLoginInput) (*application.BeginPasskeyLoginOutput, error)
-	// FinishPasskeyLogin(ctx context.Context, input application.FinishPasskeyLoginInput) (*application.FinishPasskeyLoginOutput, error)
+type AuthenticationService interface {
+	registerService
+	loginService
+	passwordResetService
 }
 
 type AuthenticationServer struct {
@@ -45,8 +54,11 @@ func NewAuthenticationServer(service AuthenticationService, config config.Config
 	return &AuthenticationServer{service: service, config: config}
 }
 
-func (s *AuthenticationServer) Registration(ctx context.Context, req *connect.Request[v1.RegistrationRequest]) (*connect.Response[v1.RegistrationResponse], error) {
-	md := meta.GetMeta(ctx)
+func (s *AuthenticationServer) Registration(
+	ctx context.Context,
+	req *connect.Request[v1.RegistrationRequest],
+) (*connect.Response[v1.RegistrationResponse], error) {
+	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.Registration(ctx, application.RegistrationInput{
 		Email:    req.Msg.Email,
@@ -54,8 +66,8 @@ func (s *AuthenticationServer) Registration(ctx context.Context, req *connect.Re
 		Name:     req.Msg.GetName(),
 		Phone:    req.Msg.Phone,
 		Meta: application.MetaInput{
-			IPAddress: md.Peer(),
-			UserAgent: md.UserAgent(),
+			IPAddress: requestMeta.Peer(),
+			UserAgent: requestMeta.UserAgent(),
 		},
 	})
 	if err != nil {
@@ -64,22 +76,25 @@ func (s *AuthenticationServer) Registration(ctx context.Context, req *connect.Re
 
 	return connect.NewResponse(&v1.RegistrationResponse{Flow: &v1.AuthFlow{
 		Id:        out.Flow.ID,
-		FlowType:  v1.AuthFlowType(out.Flow.FlowType),
-		FlowState: v1.AuthFlowState(out.Flow.FlowState),
+		FlowType:  fromAuthFlowType(out.Flow.FlowType),
+		FlowState: fromAuthFlowState(out.Flow.FlowState),
 		ExpiresAt: timestamppb.New(out.Flow.ExpiresAt),
 	}}), nil
 }
 
-func (s *AuthenticationServer) CompleteRegistration(ctx context.Context, req *connect.Request[v1.CompleteRegistrationRequest]) (*connect.Response[v1.CompleteRegistrationResponse], error) {
-	md := meta.GetMeta(ctx)
+func (s *AuthenticationServer) CompleteRegistration(
+	ctx context.Context,
+	req *connect.Request[v1.CompleteRegistrationRequest],
+) (*connect.Response[v1.CompleteRegistrationResponse], error) {
+	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.CompleteRegistration(ctx, application.CompleteRegistrationInput{
 		FlowID:    req.Msg.GetFlowId(),
 		EmailCode: req.Msg.EmailCode,
 		PhoneCode: req.Msg.PhoneCode,
 		Meta: application.MetaInput{
-			IPAddress: md.Peer(),
-			UserAgent: md.UserAgent(),
+			IPAddress: requestMeta.Peer(),
+			UserAgent: requestMeta.UserAgent(),
 		},
 	})
 	if err != nil {
@@ -97,71 +112,100 @@ func (s *AuthenticationServer) CompleteRegistration(ctx context.Context, req *co
 	}}), nil
 }
 
-func (s *AuthenticationServer) Login(ctx context.Context, req *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error) {
-	md := meta.GetMeta(ctx)
+func (s *AuthenticationServer) ResendRegistrationCode(
+	ctx context.Context,
+	req *connect.Request[v1.ResendRegistrationCodeRequest],
+) (*connect.Response[v1.ResendRegistrationCodeResponse], error) {
+	requestMeta := meta.GetMeta(ctx)
 
-	out, err := s.service.Login(ctx, application.LoginInput{
-		Identifier: req.Msg.GetIdentifier(),
-		Password:   req.Msg.GetPassword(),
+	out, err := s.service.ResendRegistrationCode(ctx, application.ResendRegistrationCodeInput{
+		FlowID: req.Msg.GetFlowId(),
 		Meta: application.MetaInput{
-			IPAddress: md.Peer(),
-			UserAgent: md.UserAgent(),
+			IPAddress: requestMeta.Peer(),
+			UserAgent: requestMeta.UserAgent(),
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &v1.LoginResponse{}
-
-	if out.Token != nil && out.RefreshToken != nil && out.User != nil {
-		resp.Result = &v1.LoginResponse_Success{Success: &v1.LoginSuccess{
-			Token: &v1.Token{
-				AccessToken:  *out.Token,
-				RefreshToken: *out.RefreshToken,
-				TokenType:    domain.TokenType,
-				ExpiresIn:    *out.TokenExpiresIn,
-			},
-			User: &v1.User{
-				Id:        out.User.ID,
-				Status:    fromUserStatus(out.User.Status),
-				Name:      out.User.Name,
-				Username:  out.User.Username,
-				AvatarUrl: out.User.AvatarURL,
-				CreatedAt: timestamppb.New(out.User.CreatedAt),
-				UpdatedAt: timestamppb.New(out.User.UpdatedAt),
-			},
-		}}
-	}
-
-	availableMfaMethods := make([]v1.MfaFactorType, 0, len(out.AvailableMFAMethods))
-	for _, m := range out.AvailableMFAMethods {
-		availableMfaMethods = append(availableMfaMethods, fromMfaFactorType(m))
-	}
-
-	if out.Flow != nil && out.MFARequired {
-		resp.Result = &v1.LoginResponse_Mfa{Mfa: &v1.MfaRequired{
-			Flow: &v1.AuthFlow{
-				Id:        out.Flow.ID,
-				FlowType:  fromAuthFlowType(out.Flow.FlowType),
-				FlowState: fromAuthFlowState(out.Flow.FlowState),
-				ExpiresAt: timestamppb.New(out.Flow.ExpiresAt),
-			},
-			AvailableMfaMethods: availableMfaMethods,
-		}}
-	}
-
-	return connect.NewResponse(resp), nil
+	return connect.NewResponse(&v1.ResendRegistrationCodeResponse{Flow: &v1.AuthFlow{
+		Id:        out.Flow.ID,
+		FlowType:  fromAuthFlowType(out.Flow.FlowType),
+		FlowState: fromAuthFlowState(out.Flow.FlowState),
+		ExpiresAt: timestamppb.New(out.Flow.ExpiresAt),
+	}}), nil
 }
 
-func (s *AuthenticationServer) RefreshToken(ctx context.Context, req *connect.Request[v1.RefreshTokenRequest]) (*connect.Response[v1.RefreshTokenResponse], error) {
-	md := meta.GetMeta(ctx)
+func (s *AuthenticationServer) Login(
+	ctx context.Context,
+	req *connect.Request[v1.LoginRequest],
+) (*connect.Response[v1.LoginResponse], error) {
+	requestMeta := meta.GetMeta(ctx)
+
+	out, err := s.service.Login(ctx, application.LoginInput{
+		Identifier: req.Msg.GetIdentifier(),
+		Password:   req.Msg.GetPassword(),
+		Meta: application.MetaInput{
+			IPAddress: requestMeta.Peer(),
+			UserAgent: requestMeta.UserAgent(),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if out.MFA != nil {
+		availableMfaMethods := make([]v1.MfaFactorType, 0, len(out.MFA.AvailableMFAMethods))
+		for _, m := range out.MFA.AvailableMFAMethods {
+			availableMfaMethods = append(availableMfaMethods, fromMfaFactorType(m))
+		}
+
+		return connect.NewResponse(&v1.LoginResponse{Result: &v1.LoginResponse_LoginMfa{LoginMfa: &v1.LoginMfa{
+			Flow: &v1.AuthFlow{
+				Id:        out.MFA.Flow.ID,
+				FlowType:  fromAuthFlowType(out.MFA.Flow.FlowType),
+				FlowState: fromAuthFlowState(out.MFA.Flow.FlowState),
+				ExpiresAt: timestamppb.New(out.MFA.Flow.ExpiresAt),
+			},
+			AvailableMfaMethods: availableMfaMethods,
+		}}}), nil
+	}
+
+	if out.Token != nil {
+		return connect.NewResponse(&v1.LoginResponse{Result: &v1.LoginResponse_LoginToken{LoginToken: &v1.LoginToken{
+			Token: &v1.Token{
+				AccessToken:  out.Token.AccessToken,
+				RefreshToken: out.Token.RefreshToken,
+				TokenType:    domain.TokenType,
+				ExpiresIn:    out.Token.ExpiresIn,
+			},
+			User: &v1.User{
+				Id:        out.Token.User.ID,
+				Status:    fromUserStatus(out.Token.User.Status),
+				Name:      out.Token.User.Name,
+				Username:  out.Token.User.Username,
+				AvatarUrl: out.Token.User.AvatarURL,
+				CreatedAt: timestamppb.New(out.Token.User.CreatedAt),
+				UpdatedAt: timestamppb.New(out.Token.User.UpdatedAt),
+			},
+		}}}), nil
+	}
+
+	return connect.NewResponse(&v1.LoginResponse{}), nil
+}
+
+func (s *AuthenticationServer) RefreshToken(
+	ctx context.Context,
+	req *connect.Request[v1.RefreshTokenRequest],
+) (*connect.Response[v1.RefreshTokenResponse], error) {
+	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.RefreshToken(ctx, application.RefreshTokenInput{
 		RefreshToken: req.Msg.GetRefreshToken(),
 		Meta: application.MetaInput{
-			IPAddress: md.Peer(),
-			UserAgent: md.UserAgent(),
+			IPAddress: requestMeta.Peer(),
+			UserAgent: requestMeta.UserAgent(),
 		},
 	})
 	if err != nil {
@@ -176,35 +220,33 @@ func (s *AuthenticationServer) RefreshToken(ctx context.Context, req *connect.Re
 	}}), nil
 }
 
-func (s *AuthenticationServer) CompleteMfa(ctx context.Context, req *connect.Request[v1.CompleteMfaRequest]) (*connect.Response[v1.CompleteMfaResponse], error) {
-	md := meta.GetMeta(ctx)
+func (s *AuthenticationServer) CompleteLoginMfa(
+	ctx context.Context,
+	req *connect.Request[v1.CompleteLoginMfaRequest],
+) (*connect.Response[v1.CompleteLoginMfaResponse], error) {
+	requestMeta := meta.GetMeta(ctx)
 
-	out, err := s.service.CompleteMfa(ctx, application.CompleteMfaInput{
+	out, err := s.service.CompleteLoginMfa(ctx, application.CompleteLoginMfaInput{
 		FlowID:     req.Msg.GetFlowId(),
 		Code:       req.Msg.GetCode(),
 		FactorType: toMfaFactorType(req.Msg.GetFactorType()),
 		Meta: application.MetaInput{
-			IPAddress: md.Peer(),
-			UserAgent: md.UserAgent(),
+			IPAddress: requestMeta.Peer(),
+			UserAgent: requestMeta.UserAgent(),
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &v1.CompleteMfaResponse{}
-
-	if out.Token != nil && out.RefreshToken != nil {
-		resp.Token = &v1.Token{
-			AccessToken:  *out.Token,
-			RefreshToken: *out.RefreshToken,
+	return connect.NewResponse(&v1.CompleteLoginMfaResponse{
+		Token: &v1.Token{
+			AccessToken:  out.Token,
+			RefreshToken: out.RefreshToken,
 			TokenType:    domain.TokenType,
-			ExpiresIn:    *out.TokenExpiresIn,
-		}
-	}
-
-	if out.User != nil {
-		resp.User = &v1.User{
+			ExpiresIn:    out.TokenExpiresIn,
+		},
+		User: &v1.User{
 			Id:        out.User.ID,
 			Status:    fromUserStatus(out.User.Status),
 			Name:      out.User.Name,
@@ -212,38 +254,86 @@ func (s *AuthenticationServer) CompleteMfa(ctx context.Context, req *connect.Req
 			AvatarUrl: out.User.AvatarURL,
 			CreatedAt: timestamppb.New(out.User.CreatedAt),
 			UpdatedAt: timestamppb.New(out.User.UpdatedAt),
-		}
-	}
-
-	return connect.NewResponse(resp), nil
+		},
+	}), nil
 }
 
-func (s *AuthenticationServer) InitiateVerification(ctx context.Context, req *connect.Request[v1.InitiateVerificationRequest]) (*connect.Response[v1.InitiateVerificationResponse], error) {
-	md := meta.GetMeta(ctx)
+func (s *AuthenticationServer) InitiatePasswordReset(
+	ctx context.Context,
+	req *connect.Request[v1.InitiatePasswordResetRequest],
+) (*connect.Response[v1.InitiatePasswordResetResponse], error) {
+	requestMeta := meta.GetMeta(ctx)
 
-	out, err := s.service.InitiateVerification(ctx, application.InitiateVerificationInput{
-		FlowID:     req.Msg.FlowId,
+	out, err := s.service.InitiatePasswordReset(ctx, application.InitiatePasswordResetInput{
 		Identifier: req.Msg.GetIdentifier(),
-		Purpose:    toVerificationPurpose(req.Msg.GetPurpose()),
 		Meta: application.MetaInput{
-			IPAddress: md.Peer(),
-			UserAgent: md.UserAgent(),
+			IPAddress: requestMeta.Peer(),
+			UserAgent: requestMeta.UserAgent(),
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &v1.InitiateVerificationResponse{}
+	return connect.NewResponse(&v1.InitiatePasswordResetResponse{Challenge: &v1.VerificationChallenge{
+		Id:         out.Challenge.ID,
+		Identifier: out.Challenge.Identifier,
+		Purpose:    fromVerificationPurpose(out.Challenge.Purpose),
+		ExpiresAt:  timestamppb.New(out.Challenge.ExpiresAt),
+	}}), nil
+}
 
-	if out.Challenge != nil {
-		resp.Challenge = &v1.VerificationChallenge{
-			Id:         out.Challenge.ID,
-			Identifier: out.Challenge.Identifier,
-			Purpose:    fromVerificationPurpose(out.Challenge.Purpose),
-			ExpiresAt:  timestamppb.New(out.Challenge.ExpiresAt),
-		}
+func (s *AuthenticationServer) CompletePasswordReset(
+	ctx context.Context,
+	req *connect.Request[v1.CompletePasswordResetRequest],
+) (*connect.Response[v1.CompletePasswordResetResponse], error) {
+	requestMeta := meta.GetMeta(ctx)
+
+	out, err := s.service.CompletePasswordReset(ctx, application.CompletePasswordResetInput{
+		VerificationID: req.Msg.GetVerificationId(),
+		Code:           req.Msg.GetCode(),
+		NewPassword:    req.Msg.GetNewPassword(),
+		Meta: application.MetaInput{
+			IPAddress: requestMeta.Peer(),
+			UserAgent: requestMeta.UserAgent(),
+		},
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return connect.NewResponse(resp), nil
+	return connect.NewResponse(&v1.CompletePasswordResetResponse{User: &v1.User{
+		Id:        out.User.ID,
+		Status:    fromUserStatus(out.User.Status),
+		Name:      out.User.Name,
+		Username:  out.User.Username,
+		AvatarUrl: out.User.AvatarURL,
+		CreatedAt: timestamppb.New(out.User.CreatedAt),
+		UpdatedAt: timestamppb.New(out.User.UpdatedAt),
+	}}), nil
+}
+
+func (s *AuthenticationServer) ResendPasswordResetCode(
+	ctx context.Context,
+	req *connect.Request[v1.ResendPasswordResetCodeRequest],
+) (*connect.Response[v1.ResendPasswordResetCodeResponse], error) {
+	requestMeta := meta.GetMeta(ctx)
+
+	out, err := s.service.ResendPasswordResetCode(ctx, application.ResendPasswordResetCodeInput{
+		VerificationID: req.Msg.GetVerificationId(),
+		Meta: application.MetaInput{
+			IPAddress: requestMeta.Peer(),
+			UserAgent: requestMeta.UserAgent(),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&v1.ResendPasswordResetCodeResponse{Challenge: &v1.VerificationChallenge{
+		Id:         out.Challenge.ID,
+		Identifier: out.Challenge.Identifier,
+		Purpose:    fromVerificationPurpose(out.Challenge.Purpose),
+		ExpiresAt:  timestamppb.New(out.Challenge.ExpiresAt),
+	}}), nil
 }

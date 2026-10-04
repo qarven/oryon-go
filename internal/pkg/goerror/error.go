@@ -187,6 +187,15 @@ func (e *Error) StatusCode() int {
 	}
 }
 
+// IsNotFound reports whether the error is a goerror.Error with CodeNotFound.
+func IsNotFound(err error) bool {
+	if e, ok := errors.AsType[*Error](err); ok {
+		return e.code == CodeNotFound
+	}
+
+	return false
+}
+
 func newError(err error, msg string, et Type, code Code) error {
 	return &Error{err: err, msg: msg, errType: et, code: code, fields: nil}
 }

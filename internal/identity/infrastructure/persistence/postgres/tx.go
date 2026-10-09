@@ -29,8 +29,8 @@ func insertAuthFlow(ctx context.Context, wtx *sqlc.Queries, flow domain.AuthFlow
 	}
 
 	err = wtx.CreateAuthFlow(ctx, sqlc.CreateAuthFlowParams{
-		ID:          flow.ID,
-		UserID:      pgInt8(flow.UserID),
+		ID:          pgUUID(flow.ID),
+		UserID:      pgUUIDPtr(flow.UserID),
 		FlowType:    flow.FlowType.Value(),
 		FlowState:   flow.FlowState.Value(),
 		IpAddress:   pgText(flow.IPAddress),
@@ -56,9 +56,9 @@ func createVerificationChallengeTx(
 	challenge domain.VerificationChallenge,
 ) error {
 	err := wtx.CreateVerificationChallenge(ctx, sqlc.CreateVerificationChallengeParams{
-		ID:          challenge.ID,
-		UserID:      pgInt8(challenge.UserID),
-		FlowID:      pgInt8(challenge.FlowID),
+		ID:          pgUUID(challenge.ID),
+		UserID:      pgUUIDPtr(challenge.UserID),
+		FlowID:      pgUUIDPtr(challenge.FlowID),
 		Identifier:  challenge.Identifier,
 		Purpose:     int16(challenge.Purpose),
 		Code:        challenge.CodeHash,
@@ -77,7 +77,7 @@ func createVerificationChallengeTx(
 		ConsumedAt: pgTz(challenge.CreatedAt),
 		Identifier: challenge.Identifier,
 		Purpose:    int16(challenge.Purpose),
-		ExceptID:   challenge.ID,
+		ExceptID:   pgUUID(challenge.ID),
 	})
 }
 
@@ -99,8 +99,8 @@ func (p *Postgres) RotateRefreshToken(ctx context.Context, data application.Rota
 	wtx := p.query.WithTx(transaction)
 
 	err = wtx.CreateRefreshToken(ctx, sqlc.CreateRefreshTokenParams{
-		ID:        data.NewRefreshToken.ID,
-		SessionID: data.NewRefreshToken.SessionID,
+		ID:        pgUUID(data.NewRefreshToken.ID),
+		SessionID: pgUUID(data.NewRefreshToken.SessionID),
 		Token:     data.NewRefreshToken.TokenHash,
 		IssuedAt:  pgTz(data.NewRefreshToken.IssuedAt),
 		ExpiresAt: pgTz(data.NewRefreshToken.ExpiresAt),
@@ -111,16 +111,16 @@ func (p *Postgres) RotateRefreshToken(ctx context.Context, data application.Rota
 	}
 
 	err = wtx.UpdateRefreshToken(ctx, sqlc.UpdateRefreshTokenParams{
-		ID:         data.OldRefreshToken.ID,
+		ID:         pgUUID(data.OldRefreshToken.ID),
 		RevokedAt:  pgTzPtr(data.OldRefreshToken.RevokedAt),
-		ReplacedBy: pgInt8(data.OldRefreshToken.ReplacedBy),
+		ReplacedBy: pgUUIDPtr(data.OldRefreshToken.ReplacedBy),
 	})
 	if err != nil {
 		return err
 	}
 
 	err = wtx.UpdateSession(ctx, sqlc.UpdateSessionParams{
-		ID:            data.Session.ID,
+		ID:            pgUUID(data.Session.ID),
 		LastSeenAt:    pgTzPtr(data.Session.LastSeenAt),
 		MfaVerifiedAt: pgTzPtr(data.Session.MFAVerifiedAt),
 		RevokedAt:     pgTzPtr(data.Session.RevokedAt),
@@ -151,7 +151,7 @@ func (p *Postgres) RevokeSession(ctx context.Context, data application.RevokeSes
 	wtx := p.query.WithTx(transaction)
 
 	err = wtx.RevokeRefreshToken(ctx, sqlc.RevokeRefreshTokenParams{
-		ID:        data.RefreshToken.ID,
+		ID:        pgUUID(data.RefreshToken.ID),
 		RevokedAt: pgTzPtr(data.RefreshToken.RevokedAt),
 	})
 	if err != nil {
@@ -159,7 +159,7 @@ func (p *Postgres) RevokeSession(ctx context.Context, data application.RevokeSes
 	}
 
 	err = wtx.RevokeSession(ctx, sqlc.RevokeSessionParams{
-		ID:        data.Session.ID,
+		ID:        pgUUID(data.Session.ID),
 		RevokedAt: pgTzPtr(data.Session.RevokedAt),
 	})
 	if err != nil {
@@ -187,8 +187,8 @@ func (p *Postgres) CreateLoginSession(ctx context.Context, data application.Crea
 	wtx := p.query.WithTx(transaction)
 
 	err = wtx.CreateSession(ctx, sqlc.CreateSessionParams{
-		ID:            data.Session.ID,
-		UserID:        data.Session.UserID,
+		ID:            pgUUID(data.Session.ID),
+		UserID:        pgUUID(data.Session.UserID),
 		Token:         data.Session.TokenHash,
 		CreatedAt:     pgTz(data.Session.CreatedAt),
 		ExpiresAt:     pgTz(data.Session.ExpiresAt),
@@ -202,8 +202,8 @@ func (p *Postgres) CreateLoginSession(ctx context.Context, data application.Crea
 	}
 
 	err = wtx.CreateRefreshToken(ctx, sqlc.CreateRefreshTokenParams{
-		ID:        data.RefreshToken.ID,
-		SessionID: data.RefreshToken.SessionID,
+		ID:        pgUUID(data.RefreshToken.ID),
+		SessionID: pgUUID(data.RefreshToken.SessionID),
 		Token:     data.RefreshToken.TokenHash,
 		IssuedAt:  pgTz(data.RefreshToken.IssuedAt),
 		ExpiresAt: pgTz(data.RefreshToken.ExpiresAt),
@@ -259,7 +259,7 @@ func touchMfaLoginFactor(ctx context.Context, wtx *sqlc.Queries, factor *domain.
 	}
 
 	err := wtx.UpdateMfaFactorLastUsedAt(ctx, sqlc.UpdateMfaFactorLastUsedAtParams{
-		ID:         factor.ID,
+		ID:         pgUUID(factor.ID),
 		LastUsedAt: pgTzPtr(factor.LastUsedAt),
 	})
 	if err != nil {
@@ -280,7 +280,7 @@ func markMfaLoginBackupCodeUsed(
 	}
 
 	err := wtx.MarkBackupCodeUsed(ctx, sqlc.MarkBackupCodeUsedParams{
-		ID:     backupCode.ID,
+		ID:     pgUUID(backupCode.ID),
 		UsedAt: pgTzPtr(backupCode.UsedAt),
 	})
 	if err != nil {
@@ -298,7 +298,7 @@ func persistMfaLoginSession(
 	data application.CompleteMfaLoginData,
 ) error {
 	err := wtx.UpdateAuthFlow(ctx, sqlc.UpdateAuthFlowParams{
-		ID:          data.Flow.ID,
+		ID:          pgUUID(data.Flow.ID),
 		FlowState:   data.Flow.FlowState.Value(),
 		CompletedAt: pgTzPtr(data.Flow.CompletedAt),
 	})
@@ -307,8 +307,8 @@ func persistMfaLoginSession(
 	}
 
 	err = wtx.CreateSession(ctx, sqlc.CreateSessionParams{
-		ID:            data.Session.ID,
-		UserID:        data.Session.UserID,
+		ID:            pgUUID(data.Session.ID),
+		UserID:        pgUUID(data.Session.UserID),
 		Token:         data.Session.TokenHash,
 		CreatedAt:     pgTz(data.Session.CreatedAt),
 		ExpiresAt:     pgTz(data.Session.ExpiresAt),
@@ -322,8 +322,8 @@ func persistMfaLoginSession(
 	}
 
 	err = wtx.CreateRefreshToken(ctx, sqlc.CreateRefreshTokenParams{
-		ID:        data.RefreshToken.ID,
-		SessionID: data.RefreshToken.SessionID,
+		ID:        pgUUID(data.RefreshToken.ID),
+		SessionID: pgUUID(data.RefreshToken.SessionID),
 		Token:     data.RefreshToken.TokenHash,
 		IssuedAt:  pgTz(data.RefreshToken.IssuedAt),
 		ExpiresAt: pgTz(data.RefreshToken.ExpiresAt),
@@ -384,9 +384,9 @@ func insertRegistrationChallenges(
 ) error {
 	for _, challenge := range challenges {
 		err := wtx.CreateVerificationChallenge(ctx, sqlc.CreateVerificationChallengeParams{
-			ID:          challenge.ID,
-			UserID:      pgInt8(challenge.UserID),
-			FlowID:      pgInt8(challenge.FlowID),
+			ID:          pgUUID(challenge.ID),
+			UserID:      pgUUIDPtr(challenge.UserID),
+			FlowID:      pgUUIDPtr(challenge.FlowID),
 			Identifier:  challenge.Identifier,
 			Purpose:     int16(challenge.Purpose),
 			Code:        challenge.CodeHash,
@@ -405,7 +405,7 @@ func insertRegistrationChallenges(
 			ConsumedAt: pgTz(challenge.CreatedAt),
 			Identifier: challenge.Identifier,
 			Purpose:    int16(challenge.Purpose),
-			ExceptID:   challenge.ID,
+			ExceptID:   pgUUID(challenge.ID),
 		})
 		if err != nil {
 			return err
@@ -464,7 +464,7 @@ func (p *Postgres) CompleteRegistration(ctx context.Context, data application.Co
 // to domain.ErrIdentifierConflict.
 func createRegistrationUser(ctx context.Context, wtx *sqlc.Queries, user domain.User) error {
 	err := wtx.CreateUser(ctx, sqlc.CreateUserParams{
-		ID:        user.ID,
+		ID:        pgUUID(user.ID),
 		Status:    user.Status.Value(),
 		Name:      user.Name,
 		CreatedAt: pgTz(user.CreatedAt),
@@ -491,8 +491,8 @@ func createRegistrationContacts(
 ) error {
 	if userEmail != nil {
 		err := wtx.CreateUserEmail(ctx, sqlc.CreateUserEmailParams{
-			ID:         userEmail.ID,
-			UserID:     userEmail.UserID,
+			ID:         pgUUID(userEmail.ID),
+			UserID:     pgUUID(userEmail.UserID),
 			Email:      userEmail.Email,
 			IsPrimary:  userEmail.IsPrimary,
 			CreatedAt:  pgTz(userEmail.CreatedAt),
@@ -509,8 +509,8 @@ func createRegistrationContacts(
 
 	if userPhone != nil {
 		err := wtx.CreateUserPhoneNumber(ctx, sqlc.CreateUserPhoneNumberParams{
-			ID:         userPhone.ID,
-			UserID:     userPhone.UserID,
+			ID:         pgUUID(userPhone.ID),
+			UserID:     pgUUID(userPhone.UserID),
 			Phone:      userPhone.Phone,
 			CreatedAt:  pgTz(userPhone.CreatedAt),
 			VerifiedAt: pgTzPtr(userPhone.VerifiedAt),
@@ -535,7 +535,7 @@ func createRegistrationCredential(
 	passCred domain.PasswordCredential,
 ) error {
 	err := wtx.CreatePasswordCredential(ctx, sqlc.CreatePasswordCredentialParams{
-		UserID:            passCred.UserID,
+		UserID:            pgUUID(passCred.UserID),
 		Password:          passCred.Password,
 		PasswordChangedAt: pgTz(passCred.PasswordChangedAt),
 		CreatedAt:         pgTz(passCred.CreatedAt),
@@ -561,7 +561,7 @@ func completeRegistrationFlowState(
 	challenge domain.VerificationChallenge,
 ) error {
 	err := wtx.UpdateAuthFlow(ctx, sqlc.UpdateAuthFlowParams{
-		ID:          flow.ID,
+		ID:          pgUUID(flow.ID),
 		FlowState:   flow.FlowState.Value(),
 		CompletedAt: pgTzPtr(flow.CompletedAt),
 	})
@@ -570,7 +570,7 @@ func completeRegistrationFlowState(
 	}
 
 	err = wtx.UpdateVerificationChallenge(ctx, sqlc.UpdateVerificationChallengeParams{
-		ID:         challenge.ID,
+		ID:         pgUUID(challenge.ID),
 		Attempts:   challenge.Attempts,
 		ConsumedAt: pgTzPtr(challenge.ConsumedAt),
 	})
@@ -582,7 +582,7 @@ func completeRegistrationFlowState(
 		ConsumedAt: pgTzPtr(challenge.ConsumedAt),
 		Identifier: challenge.Identifier,
 		Purpose:    int16(challenge.Purpose),
-		ExceptID:   challenge.ID,
+		ExceptID:   pgUUID(challenge.ID),
 	})
 	if err != nil {
 		return err
@@ -715,7 +715,7 @@ func (p *Postgres) CompletePasswordReset(
 	wtx := p.query.WithTx(transaction)
 
 	err = wtx.UpdatePasswordCredential(ctx, sqlc.UpdatePasswordCredentialParams{
-		UserID:            data.UserID,
+		UserID:            pgUUID(data.UserID),
 		Password:          data.Password,
 		PasswordChangedAt: pgTz(data.ChangedAt),
 		UpdatedAt:         pgTz(data.UpdatedAt),
@@ -725,7 +725,7 @@ func (p *Postgres) CompletePasswordReset(
 	}
 
 	err = wtx.UpdateVerificationChallenge(ctx, sqlc.UpdateVerificationChallengeParams{
-		ID:         data.Challenge.ID,
+		ID:         pgUUID(data.Challenge.ID),
 		Attempts:   data.Challenge.Attempts,
 		ConsumedAt: pgTzPtr(data.Challenge.ConsumedAt),
 	})
@@ -737,7 +737,7 @@ func (p *Postgres) CompletePasswordReset(
 		ConsumedAt: pgTzPtr(data.Challenge.ConsumedAt),
 		Identifier: data.Challenge.Identifier,
 		Purpose:    int16(data.Challenge.Purpose),
-		ExceptID:   data.Challenge.ID,
+		ExceptID:   pgUUID(data.Challenge.ID),
 	})
 	if err != nil {
 		return err

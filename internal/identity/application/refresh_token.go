@@ -47,7 +47,7 @@ func (a *Application) RefreshToken(ctx context.Context, input RefreshTokenInput)
 		return nil, err
 	}
 
-	sess, err := a.loadRefreshSession(ctx, storedToken, claims.UserID, now)
+	sess, err := a.loadRefreshSession(ctx, storedToken, domain.IDFrom(claims.UserID), now)
 	if err != nil {
 		return nil, err
 	}
@@ -76,13 +76,11 @@ type refreshRotationData struct {
 	Meta        MetaInput
 }
 
-// rotateRefreshToken hashes the new refresh token, swaps it with the old
-// one, and refreshes the session.
 func (a *Application) rotateRefreshToken(
 	ctx context.Context,
 	data refreshRotationData,
 ) (*RefreshTokenOutput, error) {
-	newID := a.uid.Generate()
+	newID := domain.IDFrom(a.uuid.Generate())
 
 	newHash, err := a.sha256.Hash(data.NewRefresh)
 	if err != nil {
@@ -125,8 +123,6 @@ func (a *Application) rotateRefreshToken(
 	}, nil
 }
 
-// loadValidRefreshToken verifies the presented refresh token and returns
-// its claims with the stored, unexpired, unrevoked token row.
 func (a *Application) loadValidRefreshToken(
 	ctx context.Context,
 	token string,
@@ -187,12 +183,10 @@ func (a *Application) loadValidRefreshToken(
 	return claims, storedToken, now, nil
 }
 
-// loadRefreshSession returns the live session for a refresh token,
-// ensuring it belongs to the token user.
 func (a *Application) loadRefreshSession(
 	ctx context.Context,
 	storedToken *domain.RefreshToken,
-	userID int64,
+	userID domain.ID,
 	now time.Time,
 ) (*domain.Session, error) {
 	sess, err := a.repo.GetSessionByID(ctx, storedToken.SessionID)
@@ -232,7 +226,7 @@ func (a *Application) loadRefreshSession(
 			"token_user_id", userID,
 		)
 		mismatchErr := fmt.Errorf(
-			"%w: session user %d does not match token user %d",
+			"%w: session user %s does not match token user %s",
 			ErrSessionUserMismatch,
 			sess.UserID,
 			userID,

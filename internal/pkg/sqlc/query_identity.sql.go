@@ -23,7 +23,7 @@ type ConsumeSiblingChallengesParams struct {
 	ConsumedAt pgtype.Timestamptz
 	Identifier string
 	Purpose    int16
-	ExceptID   int64
+	ExceptID   pgtype.UUID
 }
 
 func (q *Queries) ConsumeSiblingChallenges(ctx context.Context, arg ConsumeSiblingChallengesParams) error {
@@ -42,8 +42,8 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 `
 
 type CreateAuthFlowParams struct {
-	ID          int64
-	UserID      pgtype.Int8
+	ID          pgtype.UUID
+	UserID      pgtype.UUID
 	FlowType    int16
 	FlowState   int16
 	IpAddress   pgtype.Text
@@ -76,7 +76,7 @@ VALUES ($1, $2, $3, $4, $5)
 `
 
 type CreatePasswordCredentialParams struct {
-	UserID            int64
+	UserID            pgtype.UUID
 	Password          string
 	PasswordChangedAt pgtype.Timestamptz
 	CreatedAt         pgtype.Timestamptz
@@ -100,8 +100,8 @@ VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type CreateRefreshTokenParams struct {
-	ID        int64
-	SessionID int64
+	ID        pgtype.UUID
+	SessionID pgtype.UUID
 	Token     []byte
 	IssuedAt  pgtype.Timestamptz
 	ExpiresAt pgtype.Timestamptz
@@ -126,8 +126,8 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateSecurityEventParams struct {
-	ID        int64
-	UserID    pgtype.Int8
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
 	EventType string
 	IpAddress pgtype.Text
 	UserAgent pgtype.Text
@@ -154,8 +154,8 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type CreateSessionParams struct {
-	ID            int64
-	UserID        int64
+	ID            pgtype.UUID
+	UserID        pgtype.UUID
 	Token         []byte
 	CreatedAt     pgtype.Timestamptz
 	ExpiresAt     pgtype.Timestamptz
@@ -186,7 +186,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateUserParams struct {
-	ID        int64
+	ID        pgtype.UUID
 	Status    int16
 	Name      string
 	AvatarUrl pgtype.Text
@@ -214,8 +214,8 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateUserEmailParams struct {
-	ID         int64
-	UserID     int64
+	ID         pgtype.UUID
+	UserID     pgtype.UUID
 	Email      string
 	IsPrimary  bool
 	CreatedAt  pgtype.Timestamptz
@@ -242,8 +242,8 @@ VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type CreateUserPhoneNumberParams struct {
-	ID         int64
-	UserID     int64
+	ID         pgtype.UUID
+	UserID     pgtype.UUID
 	Phone      string
 	CreatedAt  pgtype.Timestamptz
 	VerifiedAt pgtype.Timestamptz
@@ -268,9 +268,9 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 `
 
 type CreateVerificationChallengeParams struct {
-	ID          int64
-	UserID      pgtype.Int8
-	FlowID      pgtype.Int8
+	ID          pgtype.UUID
+	UserID      pgtype.UUID
+	FlowID      pgtype.UUID
 	Identifier  string
 	Purpose     int16
 	Code        []byte
@@ -324,7 +324,7 @@ UPDATE auth_flows SET expires_at = $1 WHERE id = $2
 
 type ExtendAuthFlowExpiryParams struct {
 	ExpiresAt pgtype.Timestamptz
-	ID        int64
+	ID        pgtype.UUID
 }
 
 func (q *Queries) ExtendAuthFlowExpiry(ctx context.Context, arg ExtendAuthFlowExpiryParams) error {
@@ -339,7 +339,7 @@ WHERE id = $1
 LIMIT 1
 `
 
-func (q *Queries) GetAuthFlowByID(ctx context.Context, id int64) (AuthFlow, error) {
+func (q *Queries) GetAuthFlowByID(ctx context.Context, id pgtype.UUID) (AuthFlow, error) {
 	row := q.db.QueryRow(ctx, getAuthFlowByID, id)
 	var i AuthFlow
 	err := row.Scan(
@@ -364,7 +364,7 @@ WHERE user_id = $1
 LIMIT 1
 `
 
-func (q *Queries) GetPasswordCredentialByUserID(ctx context.Context, userID int64) (PasswordCredential, error) {
+func (q *Queries) GetPasswordCredentialByUserID(ctx context.Context, userID pgtype.UUID) (PasswordCredential, error) {
 	row := q.db.QueryRow(ctx, getPasswordCredentialByUserID, userID)
 	var i PasswordCredential
 	err := row.Scan(
@@ -384,7 +384,7 @@ WHERE user_id = $1 AND is_primary = true AND deleted_at IS NULL
 LIMIT 1
 `
 
-func (q *Queries) GetPrimaryUserEmailByUserID(ctx context.Context, userID int64) (UserEmail, error) {
+func (q *Queries) GetPrimaryUserEmailByUserID(ctx context.Context, userID pgtype.UUID) (UserEmail, error) {
 	row := q.db.QueryRow(ctx, getPrimaryUserEmailByUserID, userID)
 	var i UserEmail
 	err := row.Scan(
@@ -429,7 +429,7 @@ WHERE id = $1
 LIMIT 1
 `
 
-func (q *Queries) GetSessionByID(ctx context.Context, id int64) (Session, error) {
+func (q *Queries) GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, error) {
 	row := q.db.QueryRow(ctx, getSessionByID, id)
 	var i Session
 	err := row.Scan(
@@ -454,7 +454,7 @@ WHERE factor_id = $1
 LIMIT 1
 `
 
-func (q *Queries) GetTotpFactorByFactorID(ctx context.Context, factorID int64) (TotpFactor, error) {
+func (q *Queries) GetTotpFactorByFactorID(ctx context.Context, factorID pgtype.UUID) (TotpFactor, error) {
 	row := q.db.QueryRow(ctx, getTotpFactorByFactorID, factorID)
 	var i TotpFactor
 	err := row.Scan(
@@ -475,7 +475,7 @@ WHERE id = $1
 LIMIT 1
 `
 
-func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
+func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
 	var i User
 	err := row.Scan(
@@ -564,7 +564,7 @@ WHERE id = $1
 LIMIT 1
 `
 
-func (q *Queries) GetVerificationChallengeByID(ctx context.Context, id int64) (VerificationChallenge, error) {
+func (q *Queries) GetVerificationChallengeByID(ctx context.Context, id pgtype.UUID) (VerificationChallenge, error) {
 	row := q.db.QueryRow(ctx, getVerificationChallengeByID, id)
 	var i VerificationChallenge
 	err := row.Scan(
@@ -591,7 +591,7 @@ WHERE user_id = $1
 ORDER BY created_at
 `
 
-func (q *Queries) ListBackupCodesByUserID(ctx context.Context, userID int64) ([]BackupCode, error) {
+func (q *Queries) ListBackupCodesByUserID(ctx context.Context, userID pgtype.UUID) ([]BackupCode, error) {
 	rows, err := q.db.Query(ctx, listBackupCodesByUserID, userID)
 	if err != nil {
 		return nil, err
@@ -624,7 +624,7 @@ WHERE user_id = $1
 ORDER BY created_at
 `
 
-func (q *Queries) ListMfaFactorsByUserID(ctx context.Context, userID int64) ([]MfaFactor, error) {
+func (q *Queries) ListMfaFactorsByUserID(ctx context.Context, userID pgtype.UUID) ([]MfaFactor, error) {
 	rows, err := q.db.Query(ctx, listMfaFactorsByUserID, userID)
 	if err != nil {
 		return nil, err
@@ -660,7 +660,7 @@ WHERE user_id = $1 AND revoked_at IS NULL
 ORDER BY created_at
 `
 
-func (q *Queries) ListMfaFactorsByUserIDActive(ctx context.Context, userID int64) ([]MfaFactor, error) {
+func (q *Queries) ListMfaFactorsByUserIDActive(ctx context.Context, userID pgtype.UUID) ([]MfaFactor, error) {
 	rows, err := q.db.Query(ctx, listMfaFactorsByUserIDActive, userID)
 	if err != nil {
 		return nil, err
@@ -743,7 +743,7 @@ UPDATE backup_codes SET used_at = $1 WHERE id = $2
 
 type MarkBackupCodeUsedParams struct {
 	UsedAt pgtype.Timestamptz
-	ID     int64
+	ID     pgtype.UUID
 }
 
 func (q *Queries) MarkBackupCodeUsed(ctx context.Context, arg MarkBackupCodeUsedParams) error {
@@ -757,7 +757,7 @@ UPDATE refresh_tokens SET revoked_at = $1 WHERE id = $2
 
 type RevokeRefreshTokenParams struct {
 	RevokedAt pgtype.Timestamptz
-	ID        int64
+	ID        pgtype.UUID
 }
 
 func (q *Queries) RevokeRefreshToken(ctx context.Context, arg RevokeRefreshTokenParams) error {
@@ -771,7 +771,7 @@ UPDATE sessions SET revoked_at = $1 WHERE id = $2
 
 type RevokeSessionParams struct {
 	RevokedAt pgtype.Timestamptz
-	ID        int64
+	ID        pgtype.UUID
 }
 
 func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) error {
@@ -786,7 +786,7 @@ UPDATE auth_flows SET flow_state = $1, completed_at = $2 WHERE id = $3
 type UpdateAuthFlowParams struct {
 	FlowState   int16
 	CompletedAt pgtype.Timestamptz
-	ID          int64
+	ID          pgtype.UUID
 }
 
 func (q *Queries) UpdateAuthFlow(ctx context.Context, arg UpdateAuthFlowParams) error {
@@ -800,7 +800,7 @@ UPDATE mfa_factors SET last_used_at = $1 WHERE id = $2
 
 type UpdateMfaFactorLastUsedAtParams struct {
 	LastUsedAt pgtype.Timestamptz
-	ID         int64
+	ID         pgtype.UUID
 }
 
 func (q *Queries) UpdateMfaFactorLastUsedAt(ctx context.Context, arg UpdateMfaFactorLastUsedAtParams) error {
@@ -818,7 +818,7 @@ type UpdatePasswordCredentialParams struct {
 	Password          string
 	PasswordChangedAt pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
-	UserID            int64
+	UserID            pgtype.UUID
 }
 
 func (q *Queries) UpdatePasswordCredential(ctx context.Context, arg UpdatePasswordCredentialParams) error {
@@ -837,8 +837,8 @@ UPDATE refresh_tokens SET revoked_at = $1, replaced_by = $2 WHERE id = $3
 
 type UpdateRefreshTokenParams struct {
 	RevokedAt  pgtype.Timestamptz
-	ReplacedBy pgtype.Int8
-	ID         int64
+	ReplacedBy pgtype.UUID
+	ID         pgtype.UUID
 }
 
 func (q *Queries) UpdateRefreshToken(ctx context.Context, arg UpdateRefreshTokenParams) error {
@@ -856,7 +856,7 @@ type UpdateSessionParams struct {
 	MfaVerifiedAt pgtype.Timestamptz
 	RevokedAt     pgtype.Timestamptz
 	ExpiresAt     pgtype.Timestamptz
-	ID            int64
+	ID            pgtype.UUID
 }
 
 func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) error {
@@ -877,7 +877,7 @@ UPDATE verification_challenges SET attempts = $1, consumed_at = $2 WHERE id = $3
 type UpdateVerificationChallengeParams struct {
 	Attempts   int16
 	ConsumedAt pgtype.Timestamptz
-	ID         int64
+	ID         pgtype.UUID
 }
 
 func (q *Queries) UpdateVerificationChallenge(ctx context.Context, arg UpdateVerificationChallengeParams) error {

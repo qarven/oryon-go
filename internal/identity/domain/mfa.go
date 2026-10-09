@@ -2,7 +2,6 @@ package domain
 
 import (
 	"errors"
-	"regexp"
 	"time"
 )
 
@@ -37,8 +36,8 @@ func (t MfaFactorType) IsValid() bool {
 }
 
 type MfaFactor struct {
-	ID         int64
-	UserID     int64
+	ID         ID
+	UserID     ID
 	Type       MfaFactorType
 	Name       string
 	CreatedAt  time.Time
@@ -99,7 +98,7 @@ func (a TotpAlgorithm) IsValid() bool {
 }
 
 type TotpFactor struct {
-	FactorID  int64
+	FactorID  ID
 	Secret    []byte
 	Algorithm TotpAlgorithm
 	Digits    int16
@@ -108,8 +107,8 @@ type TotpFactor struct {
 }
 
 type BackupCode struct {
-	ID        int64
-	UserID    int64
+	ID        ID
+	UserID    ID
 	CodeHash  []byte
 	UsedAt    *time.Time
 	CreatedAt time.Time
@@ -117,15 +116,4 @@ type BackupCode struct {
 
 func (b BackupCode) IsUsed() bool {
 	return b.UsedAt != nil
-}
-
-// backupCodePattern matches the canonical recovery code format: 16
-// alphanumeric characters in two groups of 8 separated by a hyphen
-// (e.g. Ab12Cd34-Ef56Gh78). Codes are single-use.
-var backupCodePattern = regexp.MustCompile(`^[A-Za-z0-9]{8}-[A-Za-z0-9]{8}$`)
-
-// IsValidBackupCodeFormat reports whether code uses the canonical
-// XXXXXXXX-XXXXXXXX recovery code format.
-func IsValidBackupCodeFormat(code string) bool {
-	return backupCodePattern.MatchString(code)
 }

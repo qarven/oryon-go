@@ -10,13 +10,13 @@ var (
 )
 
 type RefreshToken struct {
-	ID         int64
-	SessionID  int64
+	ID         ID
+	SessionID  ID
 	TokenHash  []byte
 	IssuedAt   time.Time
 	ExpiresAt  time.Time
 	RevokedAt  *time.Time
-	ReplacedBy *int64
+	ReplacedBy *ID
 	CreatedIP  *string
 }
 

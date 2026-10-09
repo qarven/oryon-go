@@ -3,8 +3,10 @@ package postgres
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/qarven/oryon-go/internal/identity/domain"
 	"github.com/qarven/oryon-go/internal/pkg/instrument"
 	"github.com/qarven/oryon-go/internal/pkg/sqlc"
 )
@@ -63,20 +65,39 @@ func fromPgTz(t pgtype.Timestamptz) *time.Time {
 	return &tt
 }
 
-func pgInt8(v *int64) pgtype.Int8 {
-	if v == nil {
-		return pgtype.Int8{Valid: false}
+func pgUUID(id domain.ID) pgtype.UUID {
+	var pguuid pgtype.UUID
+
+	err := pguuid.Scan(id.String())
+	if err != nil {
+		return pgtype.UUID{Valid: false}
 	}
 
-	return pgtype.Int8{Int64: *v, Valid: true}
+	return pguuid
 }
 
-func fromPgInt8(v pgtype.Int8) *int64 {
-	if !v.Valid {
+func pgUUIDPtr(id *domain.ID) pgtype.UUID {
+	if id == nil {
+		return pgtype.UUID{Valid: false}
+	}
+
+	return pgUUID(*id)
+}
+
+func fromPgUUID(u pgtype.UUID) domain.ID {
+	if !u.Valid {
+		return ""
+	}
+
+	return domain.IDFrom(uuid.UUID(u.Bytes).String())
+}
+
+func fromPgUUIDPtr(u pgtype.UUID) *domain.ID {
+	if !u.Valid {
 		return nil
 	}
 
-	val := v.Int64
+	id := fromPgUUID(u)
 
-	return &val
+	return &id
 }

@@ -12,7 +12,7 @@ func (p *Postgres) UpdateVerificationChallenge(ctx context.Context, challenge do
 	defer span.End()
 
 	return p.query.UpdateVerificationChallenge(ctx, sqlc.UpdateVerificationChallengeParams{
-		ID:         challenge.ID,
+		ID:         pgUUID(challenge.ID),
 		Attempts:   challenge.Attempts,
 		ConsumedAt: pgTzPtr(challenge.ConsumedAt),
 	})

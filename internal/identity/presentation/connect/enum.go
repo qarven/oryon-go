@@ -47,25 +47,6 @@ func toMfaFactorType(factorType v1.MfaFactorType) domain.MfaFactorType {
 	return typ
 }
 
-func fromVerificationPurpose(purpose domain.VerificationPurpose) v1.VerificationPurpose {
-	var protoPurpose v1.VerificationPurpose
-
-	switch purpose {
-	case domain.VerificationPurposeEmailVerification:
-		protoPurpose = v1.VerificationPurpose_VERIFICATION_PURPOSE_EMAIL_VERIFICATION
-	case domain.VerificationPurposePhoneVerification:
-		protoPurpose = v1.VerificationPurpose_VERIFICATION_PURPOSE_PHONE_VERIFICATION
-	case domain.VerificationPurposeMFAVerification:
-		protoPurpose = v1.VerificationPurpose_VERIFICATION_PURPOSE_MFA_VERIFICATION
-	case domain.VerificationPurposePasswordReset:
-		protoPurpose = v1.VerificationPurpose_VERIFICATION_PURPOSE_PASSWORD_RESET
-	default:
-		protoPurpose = v1.VerificationPurpose_VERIFICATION_PURPOSE_UNSPECIFIED
-	}
-
-	return protoPurpose
-}
-
 func fromAuthFlowType(flowType domain.AuthFlowType) v1.AuthFlowType {
 	var protoTyp v1.AuthFlowType
 

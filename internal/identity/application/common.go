@@ -3,10 +3,13 @@ package application
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
 	"regexp"
+	"strings"
 
 	"github.com/qarven/oryon-go/internal/identity/domain"
 	"github.com/qarven/oryon-go/internal/pkg/goerror"
@@ -16,17 +19,22 @@ import (
 var rePhone = regexp.MustCompile(`^\+[1-9]\d{1,14}$`)
 var reUsername = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{2,19}$`)
 
-// securityEventFlowIDKey is the metadata key carrying the auth flow ID.
-const securityEventFlowIDKey = "flow_id"
-
-// securityEventIdentifierKey is the metadata key carrying the login identifier.
-const securityEventIdentifierKey = "identifier"
-
-// securityEventVerificationIDKey is the metadata key carrying the verification challenge ID.
-const securityEventVerificationIDKey = "verification_id"
+var ErrRegistrationDataMissing = errors.New("registration data missing")
 
 // sixDigitCodeModulus bounds generate6DigitCode to [0, 999999].
 const sixDigitCodeModulus = 1_000_000
+const sixteenDigitCodeModulus = 16
+
+const (
+	registrationRequestEmailKeyPrefix = "registration:req:email:"
+	registrationRequestPhoneKeyPrefix = "registration:req:phone:"
+	registrationRequestIPKeyPrefix    = "registration:req:ip:"
+)
+
+const (
+	channelEmail = "email"
+	channelPhone = "phone"
+)
 
 type MetaInput struct {
 	IPAddress string
@@ -40,10 +48,17 @@ type issueToken struct {
 	refreshToken string
 }
 
-func (a *Application) issueTokens(ctx context.Context, userID int64) (*issueToken, error) {
+type pendingRegistration struct {
+	Name         string
+	Email        string
+	Phone        string
+	PasswordHash string
+}
+
+func (a *Application) issueTokens(ctx context.Context, userID domain.ID) (*issueToken, error) {
 	accessID := a.uuid.Generate()
 
-	accessToken, err := a.accessJWT.Issue(accessID, jwt.NewClaims(userID))
+	accessToken, err := a.accessJWT.Issue(accessID, jwt.NewClaims(userID.String()))
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to generate access token", "error", err)
 
@@ -52,7 +67,7 @@ func (a *Application) issueTokens(ctx context.Context, userID int64) (*issueToke
 
 	refreshID := a.uuid.Generate()
 
-	refreshToken, err := a.refreshJWT.Issue(refreshID, jwt.NewClaims(userID))
+	refreshToken, err := a.refreshJWT.Issue(refreshID, jwt.NewClaims(userID.String()))
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to generate refresh token", "error", err)
 
@@ -67,34 +82,13 @@ func (a *Application) issueTokens(ctx context.Context, userID int64) (*issueToke
 	}, nil
 }
 
-func (a *Application) logSecurityEvent(
+func (a *Application) checkVerificationRateLimit(
 	ctx context.Context,
-	userID *int64,
-	eventType domain.SecurityEventType,
-	meta MetaInput,
-	metadata map[string]any,
-) {
-	a.goroutine.Go(context.WithoutCancel(ctx), func(ctx context.Context) error {
-		err := a.repo.CreateSecurityEvent(ctx, domain.SecurityEvent{
-			ID:        a.uid.Generate(),
-			UserID:    userID,
-			EventType: eventType,
-			IPAddress: &meta.IPAddress,
-			UserAgent: &meta.UserAgent,
-			Metadata:  metadata,
-			CreatedAt: a.clock.Now(),
-		})
-		if err != nil {
-			slog.ErrorContext(ctx, "failed to create security event", "error", err)
-		}
+	email, phone, ipAddress string,
+) error {
+	rateLimitMax := a.config.GetInt("modules.identity.verification.rate_limit_max")
+	rateWindow := a.config.GetMinute("modules.identity.verification.rate_limit_window")
 
-		return nil
-	})
-}
-
-// verificationRateLimitKeys builds the fixed-window rate-limit keys for the
-// given identifiers.
-func verificationRateLimitKeys(email, phone, ipAddress string) []string {
 	keys := []string{}
 	if email != "" {
 		keys = append(keys, registrationRequestEmailKeyPrefix+email)
@@ -108,21 +102,7 @@ func verificationRateLimitKeys(email, phone, ipAddress string) []string {
 		keys = append(keys, registrationRequestIPKeyPrefix+ipAddress)
 	}
 
-	return keys
-}
-
-// checkVerificationRateLimit throttles verification requests per identifier
-// and per IP (fixed window) so the endpoints cannot be used to spam an
-// identifier. Rate-limiting runs before any lookup so enumeration probes
-// are throttled too.
-func (a *Application) checkVerificationRateLimit(
-	ctx context.Context,
-	email, phone, ipAddress string,
-) error {
-	rateLimitMax := a.config.GetInt("modules.identity.verification.rate_limit_max")
-	rateWindow := a.config.GetMinute("modules.identity.verification.rate_limit_window")
-
-	for _, key := range verificationRateLimitKeys(email, phone, ipAddress) {
+	for _, key := range keys {
 		count, err := a.cache.IncrementVerificationRequest(ctx, key, rateWindow)
 		if err != nil {
 			slog.ErrorContext(ctx, "failed to increment verification rate limit", "error", err)
@@ -140,7 +120,38 @@ func (a *Application) checkVerificationRateLimit(
 	return nil
 }
 
-// generate6DigitCode returns a zero-padded 6-digit numeric code.
+func (a *Application) pendingRegistrationFromFlow(flow *domain.AuthFlow) (pendingRegistration, error) {
+	if flow.Context == nil {
+		return pendingRegistration{}, ErrRegistrationDataMissing
+	}
+
+	get := func(key string) string {
+		value, ok := flow.Context[key].(string)
+		if !ok {
+			return ""
+		}
+
+		return strings.TrimSpace(value)
+	}
+
+	out := pendingRegistration{
+		Name:         get(regCtxName),
+		Email:        strings.ToLower(get(regCtxEmail)),
+		Phone:        get(regCtxPhone),
+		PasswordHash: get(regCtxPasswordHash),
+	}
+
+	if out.Name == "" || out.PasswordHash == "" {
+		return pendingRegistration{}, ErrRegistrationDataMissing
+	}
+
+	if out.Email == "" && out.Phone == "" {
+		return pendingRegistration{}, ErrRegistrationDataMissing
+	}
+
+	return out, nil
+}
+
 func generate6DigitCode() (string, error) {
 	n, err := rand.Int(rand.Reader, big.NewInt(sixDigitCodeModulus))
 	if err != nil {
@@ -148,4 +159,15 @@ func generate6DigitCode() (string, error) {
 	}
 
 	return fmt.Sprintf("%06d", n.Int64()), nil
+}
+
+func generate32RandomString() (string, error) {
+	bytes := make([]byte, sixteenDigitCodeModulus)
+
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(bytes), nil
 }

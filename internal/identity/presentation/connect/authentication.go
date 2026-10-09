@@ -33,8 +33,6 @@ type passwordResetService interface {
 		*application.InitiatePasswordResetOutput, error)
 	CompletePasswordReset(ctx context.Context, input application.CompletePasswordResetInput) (
 		*application.CompletePasswordResetOutput, error)
-	ResendPasswordResetCode(ctx context.Context, input application.ResendPasswordResetCodeInput) (
-		*application.ResendPasswordResetCodeOutput, error)
 }
 
 type AuthenticationService interface {
@@ -75,7 +73,7 @@ func (s *AuthenticationServer) Registration(
 	}
 
 	return connect.NewResponse(&v1.RegistrationResponse{Flow: &v1.AuthFlow{
-		Id:        out.Flow.ID,
+		Id:        out.Flow.ID.String(),
 		FlowType:  fromAuthFlowType(out.Flow.FlowType),
 		FlowState: fromAuthFlowState(out.Flow.FlowState),
 		ExpiresAt: timestamppb.New(out.Flow.ExpiresAt),
@@ -89,7 +87,7 @@ func (s *AuthenticationServer) CompleteRegistration(
 	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.CompleteRegistration(ctx, application.CompleteRegistrationInput{
-		FlowID:    req.Msg.GetFlowId(),
+		FlowID:    domain.IDFrom(req.Msg.GetFlowId()),
 		EmailCode: req.Msg.EmailCode,
 		PhoneCode: req.Msg.PhoneCode,
 		Meta: application.MetaInput{
@@ -102,7 +100,7 @@ func (s *AuthenticationServer) CompleteRegistration(
 	}
 
 	return connect.NewResponse(&v1.CompleteRegistrationResponse{User: &v1.User{
-		Id:        out.User.ID,
+		Id:        out.User.ID.String(),
 		Status:    fromUserStatus(out.User.Status),
 		Name:      out.User.Name,
 		Username:  out.User.Username,
@@ -119,7 +117,7 @@ func (s *AuthenticationServer) ResendRegistrationCode(
 	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.ResendRegistrationCode(ctx, application.ResendRegistrationCodeInput{
-		FlowID: req.Msg.GetFlowId(),
+		FlowID: domain.IDFrom(req.Msg.GetFlowId()),
 		Meta: application.MetaInput{
 			IPAddress: requestMeta.Peer(),
 			UserAgent: requestMeta.UserAgent(),
@@ -130,7 +128,7 @@ func (s *AuthenticationServer) ResendRegistrationCode(
 	}
 
 	return connect.NewResponse(&v1.ResendRegistrationCodeResponse{Flow: &v1.AuthFlow{
-		Id:        out.Flow.ID,
+		Id:        out.Flow.ID.String(),
 		FlowType:  fromAuthFlowType(out.Flow.FlowType),
 		FlowState: fromAuthFlowState(out.Flow.FlowState),
 		ExpiresAt: timestamppb.New(out.Flow.ExpiresAt),
@@ -163,7 +161,7 @@ func (s *AuthenticationServer) Login(
 
 		return connect.NewResponse(&v1.LoginResponse{Result: &v1.LoginResponse_LoginMfa{LoginMfa: &v1.LoginMfa{
 			Flow: &v1.AuthFlow{
-				Id:        out.MFA.Flow.ID,
+				Id:        out.MFA.Flow.ID.String(),
 				FlowType:  fromAuthFlowType(out.MFA.Flow.FlowType),
 				FlowState: fromAuthFlowState(out.MFA.Flow.FlowState),
 				ExpiresAt: timestamppb.New(out.MFA.Flow.ExpiresAt),
@@ -181,7 +179,7 @@ func (s *AuthenticationServer) Login(
 				ExpiresIn:    out.Token.ExpiresIn,
 			},
 			User: &v1.User{
-				Id:        out.Token.User.ID,
+				Id:        out.Token.User.ID.String(),
 				Status:    fromUserStatus(out.Token.User.Status),
 				Name:      out.Token.User.Name,
 				Username:  out.Token.User.Username,
@@ -227,7 +225,7 @@ func (s *AuthenticationServer) CompleteLoginMfa(
 	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.CompleteLoginMfa(ctx, application.CompleteLoginMfaInput{
-		FlowID:     req.Msg.GetFlowId(),
+		FlowID:     domain.IDFrom(req.Msg.GetFlowId()),
 		Code:       req.Msg.GetCode(),
 		FactorType: toMfaFactorType(req.Msg.GetFactorType()),
 		Meta: application.MetaInput{
@@ -247,7 +245,7 @@ func (s *AuthenticationServer) CompleteLoginMfa(
 			ExpiresIn:    out.TokenExpiresIn,
 		},
 		User: &v1.User{
-			Id:        out.User.ID,
+			Id:        out.User.ID.String(),
 			Status:    fromUserStatus(out.User.Status),
 			Name:      out.User.Name,
 			Username:  out.User.Username,
@@ -264,7 +262,7 @@ func (s *AuthenticationServer) InitiatePasswordReset(
 ) (*connect.Response[v1.InitiatePasswordResetResponse], error) {
 	requestMeta := meta.GetMeta(ctx)
 
-	out, err := s.service.InitiatePasswordReset(ctx, application.InitiatePasswordResetInput{
+	_, err := s.service.InitiatePasswordReset(ctx, application.InitiatePasswordResetInput{
 		Identifier: req.Msg.GetIdentifier(),
 		Meta: application.MetaInput{
 			IPAddress: requestMeta.Peer(),
@@ -275,12 +273,7 @@ func (s *AuthenticationServer) InitiatePasswordReset(
 		return nil, err
 	}
 
-	return connect.NewResponse(&v1.InitiatePasswordResetResponse{Challenge: &v1.VerificationChallenge{
-		Id:         out.Challenge.ID,
-		Identifier: out.Challenge.Identifier,
-		Purpose:    fromVerificationPurpose(out.Challenge.Purpose),
-		ExpiresAt:  timestamppb.New(out.Challenge.ExpiresAt),
-	}}), nil
+	return connect.NewResponse(&v1.InitiatePasswordResetResponse{}), nil
 }
 
 func (s *AuthenticationServer) CompletePasswordReset(
@@ -290,9 +283,8 @@ func (s *AuthenticationServer) CompletePasswordReset(
 	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.CompletePasswordReset(ctx, application.CompletePasswordResetInput{
-		VerificationID: req.Msg.GetVerificationId(),
-		Code:           req.Msg.GetCode(),
-		NewPassword:    req.Msg.GetNewPassword(),
+		Code:        req.Msg.GetCode(),
+		NewPassword: req.Msg.GetNewPassword(),
 		Meta: application.MetaInput{
 			IPAddress: requestMeta.Peer(),
 			UserAgent: requestMeta.UserAgent(),
@@ -303,37 +295,12 @@ func (s *AuthenticationServer) CompletePasswordReset(
 	}
 
 	return connect.NewResponse(&v1.CompletePasswordResetResponse{User: &v1.User{
-		Id:        out.User.ID,
+		Id:        out.User.ID.String(),
 		Status:    fromUserStatus(out.User.Status),
 		Name:      out.User.Name,
 		Username:  out.User.Username,
 		AvatarUrl: out.User.AvatarURL,
 		CreatedAt: timestamppb.New(out.User.CreatedAt),
 		UpdatedAt: timestamppb.New(out.User.UpdatedAt),
-	}}), nil
-}
-
-func (s *AuthenticationServer) ResendPasswordResetCode(
-	ctx context.Context,
-	req *connect.Request[v1.ResendPasswordResetCodeRequest],
-) (*connect.Response[v1.ResendPasswordResetCodeResponse], error) {
-	requestMeta := meta.GetMeta(ctx)
-
-	out, err := s.service.ResendPasswordResetCode(ctx, application.ResendPasswordResetCodeInput{
-		VerificationID: req.Msg.GetVerificationId(),
-		Meta: application.MetaInput{
-			IPAddress: requestMeta.Peer(),
-			UserAgent: requestMeta.UserAgent(),
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return connect.NewResponse(&v1.ResendPasswordResetCodeResponse{Challenge: &v1.VerificationChallenge{
-		Id:         out.Challenge.ID,
-		Identifier: out.Challenge.Identifier,
-		Purpose:    fromVerificationPurpose(out.Challenge.Purpose),
-		ExpiresAt:  timestamppb.New(out.Challenge.ExpiresAt),
 	}}), nil
 }

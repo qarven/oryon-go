@@ -19,5 +19,5 @@ type EventPasswordResetMessage struct {
 	Name     string `json:"name"`
 	Identity string `json:"identity"`
 	Channel  string `json:"channel"` // email
-	Code     string `json:"code"`
+	Token    string `json:"token"`
 }

@@ -18,8 +18,8 @@ func (p *Postgres) CreateAuthFlow(ctx context.Context, flow domain.AuthFlow) err
 	}
 
 	return p.query.CreateAuthFlow(ctx, sqlc.CreateAuthFlowParams{
-		ID:          flow.ID,
-		UserID:      pgInt8(flow.UserID),
+		ID:          pgUUID(flow.ID),
+		UserID:      pgUUIDPtr(flow.UserID),
 		FlowType:    int16(flow.FlowType),
 		FlowState:   int16(flow.FlowState),
 		IpAddress:   pgText(flow.IPAddress),
@@ -41,8 +41,8 @@ func (p *Postgres) CreateSecurityEvent(ctx context.Context, event domain.Securit
 	}
 
 	return p.query.CreateSecurityEvent(ctx, sqlc.CreateSecurityEventParams{
-		ID:        event.ID,
-		UserID:    pgInt8(event.UserID),
+		ID:        pgUUID(event.ID),
+		UserID:    pgUUIDPtr(event.UserID),
 		EventType: string(event.EventType),
 		IpAddress: pgText(event.IPAddress),
 		UserAgent: pgText(event.UserAgent),
@@ -56,9 +56,9 @@ func (p *Postgres) CreateVerificationChallenge(ctx context.Context, challenge do
 	defer span.End()
 
 	return p.query.CreateVerificationChallenge(ctx, sqlc.CreateVerificationChallengeParams{
-		ID:          challenge.ID,
-		UserID:      pgInt8(challenge.UserID),
-		FlowID:      pgInt8(challenge.FlowID),
+		ID:          pgUUID(challenge.ID),
+		UserID:      pgUUIDPtr(challenge.UserID),
+		FlowID:      pgUUIDPtr(challenge.FlowID),
 		Identifier:  challenge.Identifier,
 		Purpose:     int16(challenge.Purpose),
 		Code:        challenge.CodeHash,

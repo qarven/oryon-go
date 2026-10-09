@@ -56,12 +56,12 @@ type Claims struct {
 	// RegisteredClaims holds the standard JWT claims.
 	jwt.RegisteredClaims
 
-	// UserID is the authenticated user identifier.
-	UserID int64 `json:"user_id,string"`
+	// UserID is the authenticated user identifier (UUIDv7 string).
+	UserID string `json:"user_id"`
 }
 
 // NewClaims builds a Claims value for the given user.
-func NewClaims(userID int64) Claims {
+func NewClaims(userID string) Claims {
 	return Claims{
 		RegisteredClaims: jwt.RegisteredClaims{},
 		UserID:           userID,

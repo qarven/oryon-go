@@ -13,7 +13,6 @@ func (a *App) initModules() {
 		expose, err := identity.New(identity.Dependency{
 			Config:       a.config,
 			Instrument:   a.ins,
-			UID:          a.uid,
 			UUID:         a.uuid,
 			Clock:        a.clock,
 			Validator:    a.validator,
@@ -38,7 +37,6 @@ func (a *App) initModules() {
 			Messaging:  a.messaging,
 			Config:     a.config,
 			Instrument: a.ins,
-			UID:        a.uid,
 			UUID:       a.uuid,
 			Clock:      a.clock,
 			Goroutine:  a.goroutine,

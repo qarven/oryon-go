@@ -10,8 +10,8 @@ var (
 )
 
 type Session struct {
-	ID            int64
-	UserID        int64
+	ID            ID
+	UserID        ID
 	TokenHash     []byte
 	CreatedAt     time.Time
 	ExpiresAt     time.Time

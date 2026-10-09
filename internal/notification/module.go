@@ -22,8 +22,7 @@ type Dependency struct {
 	Messaging  messaging.Messaging
 	Config     config.Config
 	Instrument instrument.Instrumentation
-	UID        uid.NumberID
-	UUID       uid.StringID
+	UUID       uid.ID
 	Clock      clock.Clocker
 	Goroutine  *goroutine.Manager
 	Validator  validator.Validator

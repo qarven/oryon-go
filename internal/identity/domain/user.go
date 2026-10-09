@@ -74,7 +74,7 @@ func (s UserStatus) Value() int16 {
 }
 
 type User struct {
-	ID        int64
+	ID        ID
 	Status    UserStatus
 	Name      string
 	Username  *string

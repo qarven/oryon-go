@@ -11,149 +11,8 @@ import (
 	"github.com/qarven/oryon-go/internal/pkg/goerror"
 )
 
-type CreateLoginSessionData struct {
-	Session      domain.Session
-	RefreshToken domain.RefreshToken
-}
-
-// ensureUserCanAuthenticate rejects deleted or inactive users.
-func ensureUserCanAuthenticate(ctx context.Context, user *domain.User) error {
-	if user.IsDeleted() {
-		slog.WarnContext(ctx, "user is already deleted")
-
-		return goerror.NewBusiness("account is deleted", goerror.CodeForbidden)
-	}
-
-	if !user.CanAuthenticate() {
-		slog.WarnContext(ctx, "user status is not active")
-
-		return goerror.NewBusiness("account is not active", goerror.CodeForbidden)
-	}
-
-	return nil
-}
-
-type passwordLoginSessionData struct {
-	User        *domain.User
-	Meta        MetaInput
-	Session     domain.Session
-	Access      string
-	Refresh     string
-	RefreshHash []byte
-	Now         time.Time
-}
-
-// storePasswordLoginSession persists the login session and completes the
-// password login output.
-func (a *Application) storePasswordLoginSession(
-	ctx context.Context,
-	data passwordLoginSessionData,
-) (*LoginOutput, error) {
-	err := a.repo.CreateLoginSession(ctx, CreateLoginSessionData{
-		Session: data.Session,
-		RefreshToken: domain.RefreshToken{
-			ID:        a.uid.Generate(),
-			SessionID: data.Session.ID,
-			TokenHash: data.RefreshHash,
-			IssuedAt:  data.Now,
-			ExpiresAt: data.Now.Add(a.config.GetDay("modules.identity.jwt.refresh.ttl")),
-			CreatedIP: &data.Meta.IPAddress,
-		},
-	})
-	if err != nil {
-		slog.ErrorContext(ctx, "failed to create login session", "error", err)
-
-		return nil, goerror.NewServer(err)
-	}
-
-	a.logSecurityEvent(
-		ctx,
-		&data.User.ID,
-		domain.SecurityEventTypeLoginSuccess,
-		data.Meta,
-		map[string]any{"method": "password"},
-	)
-
-	tokenExpiresIn := int64(a.config.GetMinute("modules.identity.jwt.access.ttl").Seconds())
-
-	return &LoginOutput{Token: &LoginToken{
-		AccessToken:  data.Access,
-		ExpiresIn:    tokenExpiresIn,
-		RefreshToken: data.Refresh,
-		Session:      data.Session,
-		User:         *data.User,
-	}}, nil
-}
-
-func (a *Application) loginWithEmail(ctx context.Context, identifier string) (*domain.User, error) {
-	emailRec, err := a.repo.GetUserEmailByEmail(ctx, strings.ToLower(identifier))
-	if errors.Is(err, domain.ErrEmailNotFound) {
-		slog.WarnContext(ctx, "user emails not found")
-
-		return nil, goerror.NewBusiness("invalid identifier or password", goerror.CodeUnauthorized)
-	}
-
-	if err != nil {
-		slog.ErrorContext(ctx, "failed to get user emails by email", "error", err)
-
-		return nil, goerror.NewServer(err)
-	}
-
-	user, err := a.repo.GetUserByID(ctx, emailRec.UserID)
-	if err != nil {
-		slog.ErrorContext(ctx, "failed to get user by id", "error", err)
-
-		return nil, goerror.NewServer(err)
-	}
-
-	return user, nil
-}
-
-func (a *Application) loginWithUsername(ctx context.Context, identifier string) (*domain.User, error) {
-	user, err := a.repo.GetUserByUsername(ctx, identifier)
-	if errors.Is(err, domain.ErrUserNotFound) {
-		slog.WarnContext(ctx, "user not found by username")
-
-		return nil, goerror.NewBusiness("invalid identifier or password", goerror.CodeUnauthorized)
-	}
-
-	if err != nil {
-		slog.ErrorContext(ctx, "failed to get user by username", "error", err)
-
-		return nil, goerror.NewServer(err)
-	}
-
-	return user, nil
-}
-
-func (a *Application) loginWithPhone(ctx context.Context, identifier string) (*domain.User, error) {
-	phoneRec, err := a.repo.GetUserPhoneByPhone(ctx, identifier)
-	if errors.Is(err, domain.ErrPhoneNotFound) {
-		slog.WarnContext(ctx, "user phone not found")
-
-		return nil, goerror.NewBusiness("invalid identifier or password", goerror.CodeUnauthorized)
-	}
-
-	if err != nil {
-		slog.ErrorContext(ctx, "failed to get user phone by phone number", "error", err)
-
-		return nil, goerror.NewServer(err)
-	}
-
-	user, err := a.repo.GetUserByID(ctx, phoneRec.UserID)
-	if err != nil {
-		slog.ErrorContext(ctx, "failed to get user by id", "error", err)
-
-		return nil, goerror.NewServer(err)
-	}
-
-	return user, nil
-}
-
-// ===== Login: complete MFA =====
-
 type CompleteLoginMfaInput struct {
-	FlowID     int64                `validate:"required"`
+	FlowID     domain.ID            `validate:"required"`
 	Code       string               `validate:"required"`
 	FactorType domain.MfaFactorType `validate:"required"`
 	Meta       MetaInput            `validate:"required"`
@@ -183,9 +42,9 @@ func (a *Application) CompleteLoginMfa(
 
 	input.Code = strings.TrimSpace(input.Code)
 
-	validateErr := a.validator.Validate(input)
-	if validateErr != nil {
-		return nil, goerror.NewInvalidInput(validateErr)
+	err := a.validator.Validate(input)
+	if err != nil {
+		return nil, goerror.NewInvalidInput(err)
 	}
 
 	flow, user, now, err := a.loadMfaLoginFlow(ctx, input.FlowID)
@@ -203,6 +62,11 @@ func (a *Application) CompleteLoginMfa(
 		return nil, err
 	}
 
+	issue, err := a.issueTokens(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	out, err := a.finishMfaLogin(ctx, mfaLoginFinishData{
 		Flow:       flow,
 		User:       user,
@@ -210,77 +74,93 @@ func (a *Application) CompleteLoginMfa(
 		BackupCode: backupCode,
 		Meta:       input.Meta,
 		Now:        now,
+		issue:      issue,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	a.logSecurityEvent(
-		ctx,
-		&user.ID,
-		domain.SecurityEventTypeLoginSuccess,
-		input.Meta,
-		map[string]any{
-			"method":               "mfa",
-			securityEventFlowIDKey: flow.ID,
-			"factor_type":          factor.Type,
-			"factor_id":            factor.ID,
-		},
-	)
+	a.securityEvent(domain.SecurityEventTypeLoginSuccess).
+		ForUser(&user.ID).
+		WithMeta(input.Meta).
+		With("method", "mfa").
+		With("flow_id", flow.ID).
+		With("factor_type", factor.Type).
+		With("factor_id", factor.ID).
+		Emit(ctx)
 
 	return out, nil
 }
 
-// loadMfaLoginFlow loads the MFA login flow and its user, ensuring the flow
-// exists, is unexpired, is pending MFA, and is bound to a user.
 func (a *Application) loadMfaLoginFlow(
 	ctx context.Context,
-	flowID int64,
+	flowID domain.ID,
 ) (*domain.AuthFlow, *domain.User, time.Time, error) {
 	flow, err := a.repo.GetAuthFlowByID(ctx, flowID)
 	if errors.Is(err, domain.ErrAuthFlowNotFound) {
+		slog.WarnContext(ctx, "auth flow not found")
+
 		return nil, nil, time.Time{}, goerror.NewBusiness("flow not found", goerror.CodeUnauthorized)
 	}
 
 	if err != nil {
+		slog.ErrorContext(ctx, "failed to get auth flow", "error", err)
+
 		return nil, nil, time.Time{}, goerror.NewServer(err)
 	}
 
 	now := a.clock.Now()
 	if flow.IsExpired(now) {
+		slog.WarnContext(ctx, "auth flow already expired")
+
 		return nil, nil, time.Time{}, goerror.NewBusiness("flow expired", goerror.CodeUnauthorized)
 	}
 
 	if flow.FlowState != domain.AuthFlowStatePendingMFA {
+		slog.WarnContext(ctx, "auth flow state not pending mfa", "flow_state", flow.FlowState)
+
 		return nil, nil, time.Time{}, goerror.NewBusiness("flow not pending mfa", goerror.CodeUnauthorized)
 	}
 
 	if flow.UserID == nil {
+		slog.WarnContext(ctx, "auth flow has no user")
+
 		return nil, nil, time.Time{}, goerror.NewBusiness("flow has no user", goerror.CodeUnauthorized)
 	}
 
 	user, err := a.repo.GetUserByID(ctx, *flow.UserID)
 	if errors.Is(err, domain.ErrUserNotFound) {
 		// data integrity violation
-		return nil, nil, time.Time{}, goerror.NewBusiness("user not found", goerror.CodeUnauthorized)
+		slog.ErrorContext(
+			ctx,
+			"data integrity violation: auth flow user not found",
+			"flow_id",
+			flow.ID,
+			"user_id",
+			*flow.UserID,
+		)
+
+		return nil, nil, time.Time{}, goerror.NewServer(err)
 	}
 
 	if err != nil {
+		slog.ErrorContext(ctx, "failed to get user by id", "error", err)
+
 		return nil, nil, time.Time{}, goerror.NewServer(err)
 	}
 
 	return flow, user, now, nil
 }
 
-// findLoginMfaFactor returns the verified, active factor of the requested
-// type for the user.
 func (a *Application) findLoginMfaFactor(
 	ctx context.Context,
-	userID int64,
+	userID domain.ID,
 	factorType domain.MfaFactorType,
 ) (*domain.MfaFactor, error) {
 	factors, err := a.repo.ListMfaFactorsByUserID(ctx, userID, false)
 	if err != nil {
+		slog.ErrorContext(ctx, "failed to list mfa factors by user id", "error", err)
+
 		return nil, goerror.NewServer(err)
 	}
 
@@ -296,26 +176,37 @@ func (a *Application) findLoginMfaFactor(
 	}
 
 	if factor == nil {
+		slog.WarnContext(
+			ctx,
+			"no active mfa factor of requested type",
+			"user_id",
+			userID,
+			"factor_type",
+			factorType,
+		)
+
 		return nil, goerror.NewBusiness("no active factor of requested type", goerror.CodeUnauthorized)
 	}
 
 	if factor.IsRevoked() {
+		slog.WarnContext(ctx, "mfa factor is revoked", "user_id", userID, "mfa_id", factor.ID)
+
 		return nil, goerror.NewBusiness("factor is revoked", goerror.CodeForbidden)
 	}
 
 	if !factor.IsVerified() {
+		slog.WarnContext(ctx, "mfa factor not verified", "user_id", userID, "mfa_id", factor.ID)
+
 		return nil, goerror.NewBusiness("factor not verified", goerror.CodeForbidden)
 	}
 
 	return factor, nil
 }
 
-// verifyLoginMfaCode validates the supplied code against the factor, marking
-// usage on the factor itself, and returns the consumed backup code, if any.
 func (a *Application) verifyLoginMfaCode(
 	ctx context.Context,
 	factor *domain.MfaFactor,
-	userID int64,
+	userID domain.ID,
 	code string,
 	now time.Time,
 ) (*domain.BackupCode, error) {
@@ -325,30 +216,53 @@ func (a *Application) verifyLoginMfaCode(
 	case domain.MfaFactorTypeBackupCode:
 		return a.verifyLoginBackupCode(ctx, userID, code, now)
 	default:
+		slog.WarnContext(
+			ctx,
+			"unsupported mfa factor type",
+			"user_id",
+			userID,
+			"mfa_id",
+			factor.ID,
+			"factor_type",
+			factor.Type,
+		)
+
 		return nil, goerror.NewBusiness("unsupported factor type", goerror.CodeInvalidInput)
 	}
 }
 
-// verifyLoginTotpCode validates a TOTP code and records the factor usage.
 func (a *Application) verifyLoginTotpCode(
 	ctx context.Context,
 	factor *domain.MfaFactor,
-	userID int64,
+	userID domain.ID,
 	code string,
 	now time.Time,
 ) error {
 	totp, err := a.repo.GetTotpFactorByFactorID(ctx, factor.ID)
 	if errors.Is(err, domain.ErrUserNotFound) {
 		// data integrity violation
-		return goerror.NewBusiness("user not found", goerror.CodeUnauthorized)
+		slog.ErrorContext(
+			ctx,
+			"data integrity violation: totp factor not found",
+			"user_id",
+			userID,
+			"mfa_id",
+			factor.ID,
+		)
+
+		return goerror.NewServer(err)
 	}
 
 	if err != nil {
+		slog.ErrorContext(ctx, "failed to get totp factor by factor id", "mfa_id", factor.ID, "error", err)
+
 		return goerror.NewServer(err)
 	}
 
 	secret, err := a.mfaEncryption.Decrypt(totp.Secret)
 	if err != nil {
+		slog.ErrorContext(ctx, "failed to decrypt totp secret", "mfa_id", factor.ID, "error", err)
+
 		return goerror.NewServer(err)
 	}
 
@@ -363,23 +277,16 @@ func (a *Application) verifyLoginTotpCode(
 	return nil
 }
 
-// verifyLoginBackupCode validates a backup code and returns it marked as used.
-// Codes are single-use in canonical XXXXXXXX-XXXXXXXX format; used codes
-// are skipped so they cannot be replayed.
 func (a *Application) verifyLoginBackupCode(
 	ctx context.Context,
-	userID int64,
+	userID domain.ID,
 	code string,
 	now time.Time,
 ) (*domain.BackupCode, error) {
-	if !domain.IsValidBackupCodeFormat(code) {
-		slog.WarnContext(ctx, "invalid backup code format", "user_id", userID)
-
-		return nil, goerror.NewBusiness("invalid backup code", goerror.CodeUnauthorized)
-	}
-
 	codes, err := a.repo.ListBackupCodesByUserID(ctx, userID)
 	if err != nil {
+		slog.ErrorContext(ctx, "failed to list backup codes by user id", "user_id", userID, "error", err)
+
 		return nil, goerror.NewServer(err)
 	}
 
@@ -396,6 +303,8 @@ func (a *Application) verifyLoginBackupCode(
 		}
 	}
 
+	slog.WarnContext(ctx, "invalid backup code", "user_id", userID)
+
 	return nil, goerror.NewBusiness("invalid backup code", goerror.CodeUnauthorized)
 }
 
@@ -406,35 +315,47 @@ type mfaLoginFinishData struct {
 	BackupCode *domain.BackupCode
 	Meta       MetaInput
 	Now        time.Time
+	issue      *issueToken
 }
 
-// finishMfaLogin issues tokens, persists the login session, and completes
-// the MFA flow.
 func (a *Application) finishMfaLogin(
 	ctx context.Context,
 	data mfaLoginFinishData,
 ) (*CompleteLoginMfaOutput, error) {
-	issue, err := a.issueTokens(ctx, data.User.ID)
+	accessHash, err := a.sha256.Hash(data.issue.accessToken)
 	if err != nil {
-		return nil, err
-	}
-
-	accessHash, err := a.sha256.Hash(issue.accessToken)
-	if err != nil {
-		slog.ErrorContext(ctx, "failed to hash access token", "error", err)
+		slog.ErrorContext(
+			ctx,
+			"failed to hash access token",
+			"user_id",
+			data.User.ID,
+			"flow_id",
+			data.Flow.ID,
+			"error",
+			err,
+		)
 
 		return nil, goerror.NewServer(err)
 	}
 
-	refreshHash, err := a.sha256.Hash(issue.refreshToken)
+	refreshHash, err := a.sha256.Hash(data.issue.refreshToken)
 	if err != nil {
-		slog.ErrorContext(ctx, "failed to hash refresh token", "error", err)
+		slog.ErrorContext(
+			ctx,
+			"failed to hash refresh token",
+			"user_id",
+			data.User.ID,
+			"flow_id",
+			data.Flow.ID,
+			"error",
+			err,
+		)
 
 		return nil, goerror.NewServer(err)
 	}
 
 	session := domain.Session{
-		ID:            a.uid.Generate(),
+		ID:            domain.IDFrom(a.uuid.Generate()),
 		UserID:        data.User.ID,
 		TokenHash:     accessHash,
 		CreatedAt:     data.Now,
@@ -453,15 +374,13 @@ func (a *Application) finishMfaLogin(
 	tokenExpiresIn := int64(a.config.GetMinute("modules.identity.jwt.access.ttl").Seconds())
 
 	return &CompleteLoginMfaOutput{
-		Token:          issue.accessToken,
+		Token:          data.issue.accessToken,
 		TokenExpiresIn: tokenExpiresIn,
-		RefreshToken:   issue.refreshToken,
+		RefreshToken:   data.issue.refreshToken,
 		User:           *data.User,
 	}, nil
 }
 
-// persistMfaLogin completes the MFA flow and stores the login session with
-// its refresh token.
 func (a *Application) persistMfaLogin(
 	ctx context.Context,
 	data mfaLoginFinishData,
@@ -482,7 +401,7 @@ func (a *Application) persistMfaLogin(
 		Flow:       *data.Flow,
 		Session:    session,
 		RefreshToken: domain.RefreshToken{
-			ID:        a.uid.Generate(),
+			ID:        domain.IDFrom(a.uuid.Generate()),
 			SessionID: session.ID,
 			TokenHash: refreshHash,
 			IssuedAt:  data.Now,
@@ -491,7 +410,18 @@ func (a *Application) persistMfaLogin(
 		},
 	})
 	if err != nil {
-		slog.ErrorContext(ctx, "failed to complete mfa login", "error", err)
+		slog.ErrorContext(
+			ctx,
+			"failed to complete mfa login",
+			"flow_id",
+			data.Flow.ID,
+			"user_id",
+			data.User.ID,
+			"session_id",
+			session.ID,
+			"error",
+			err,
+		)
 
 		return goerror.NewServer(err)
 	}

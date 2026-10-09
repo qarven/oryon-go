@@ -17,9 +17,7 @@ import (
 	"github.com/qarven/oryon-go/internal/pkg/validator"
 )
 
-// TxRepository groups multi-row atomic writes. Each method runs in a single
-// Postgres transaction: on error nothing is persisted, so callers must pass
-// fully validated domain objects and not retry blindly on unique violations.
+// TxRepository groups multi-row atomic writes.
 type TxRepository interface {
 	CreateRegistrationFlow(ctx context.Context, flow domain.AuthFlow, challenges []domain.VerificationChallenge) error
 	CompleteRegistration(ctx context.Context, data CompleteRegistrationData) error
@@ -36,23 +34,23 @@ type TxRepository interface {
 //
 //nolint:interfacebloat // ignore for interface has more than 10 methods
 type GetUserRepository interface {
-	GetUserByID(ctx context.Context, id int64) (*domain.User, error)
+	GetUserByID(ctx context.Context, id domain.ID) (*domain.User, error)
 	GetUserByUsername(ctx context.Context, username string) (*domain.User, error)
 	GetUserEmailByEmail(ctx context.Context, email string) (*domain.UserEmail, error)
 	GetUserPhoneByPhone(ctx context.Context, phone string) (*domain.UserPhoneNumber, error)
-	GetPrimaryUserEmailByUserID(ctx context.Context, userID int64) (*domain.UserEmail, error)
-	GetPasswordCredentialByUserID(ctx context.Context, userID int64) (*domain.PasswordCredential, error)
-	GetSessionByID(ctx context.Context, id int64) (*domain.Session, error)
+	GetPrimaryUserEmailByUserID(ctx context.Context, userID domain.ID) (*domain.UserEmail, error)
+	GetPasswordCredentialByUserID(ctx context.Context, userID domain.ID) (*domain.PasswordCredential, error)
+	GetSessionByID(ctx context.Context, id domain.ID) (*domain.Session, error)
 	GetRefreshTokenByHash(ctx context.Context, hash []byte) (*domain.RefreshToken, error)
-	GetAuthFlowByID(ctx context.Context, id int64) (*domain.AuthFlow, error)
-	GetTotpFactorByFactorID(ctx context.Context, factorID int64) (*domain.TotpFactor, error)
-	GetVerificationChallengeByID(ctx context.Context, id int64) (*domain.VerificationChallenge, error)
+	GetAuthFlowByID(ctx context.Context, id domain.ID) (*domain.AuthFlow, error)
+	GetTotpFactorByFactorID(ctx context.Context, factorID domain.ID) (*domain.TotpFactor, error)
+	GetVerificationChallengeByID(ctx context.Context, id domain.ID) (*domain.VerificationChallenge, error)
 }
 
 // ListRepository groups collection queries. Empty results are returned as empty slices.
 type ListRepository interface {
-	ListMfaFactorsByUserID(ctx context.Context, userID int64, includeRevoked bool) ([]domain.MfaFactor, error)
-	ListBackupCodesByUserID(ctx context.Context, userID int64) ([]domain.BackupCode, error)
+	ListMfaFactorsByUserID(ctx context.Context, userID domain.ID, includeRevoked bool) ([]domain.MfaFactor, error)
+	ListBackupCodesByUserID(ctx context.Context, userID domain.ID) ([]domain.BackupCode, error)
 	ListPendingChallengesByIdentifier(
 		ctx context.Context,
 		identifier string,
@@ -97,8 +95,7 @@ type Dependency struct {
 	Argon2ID        hash.Hash
 	SHA256          hash.Hash
 	MfaEncryption   encryption.Encryption
-	UID             uid.NumberID
-	UUID            uid.StringID
+	UUID            uid.ID
 	Clock           clock.Clocker
 	OTP             mfa.OTP
 	AccessJWT       jwt.JWT
@@ -116,8 +113,7 @@ type Application struct {
 	argon2id      hash.Hash
 	sha256        hash.Hash
 	mfaEncryption encryption.Encryption
-	uid           uid.NumberID
-	uuid          uid.StringID
+	uuid          uid.ID
 	clock         clock.Clocker
 	otp           mfa.OTP
 	accessJWT     jwt.JWT
@@ -136,7 +132,6 @@ func New(dep Dependency) *Application {
 		sha256:        dep.SHA256,
 		mfaEncryption: dep.MfaEncryption,
 		config:        dep.Config,
-		uid:           dep.UID,
 		uuid:          dep.UUID,
 		clock:         dep.Clock,
 		otp:           dep.OTP,

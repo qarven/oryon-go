@@ -28,9 +28,9 @@ func (p VerificationPurpose) IsValid() bool {
 }
 
 type VerificationChallenge struct {
-	ID          int64
-	UserID      *int64
-	FlowID      *int64
+	ID          ID
+	UserID      *ID
+	FlowID      *ID
 	Identifier  string
 	Purpose     VerificationPurpose
 	CodeHash    []byte
@@ -60,21 +60,6 @@ func (v *VerificationChallenge) IsConsumed() bool {
 
 func (v *VerificationChallenge) IsAttemptsExceeded() bool {
 	return v.Attempts >= v.MaxAttempts
-}
-
-func (v *VerificationChallenge) IncrementAttempts() {
-	v.Attempts++
-}
-
-func (v *VerificationChallenge) Consume(now time.Time) error {
-	err := v.CanAttempt(now)
-	if err != nil {
-		return err
-	}
-
-	v.ConsumedAt = &now
-
-	return nil
 }
 
 func (v *VerificationChallenge) CanAttempt(now time.Time) error {

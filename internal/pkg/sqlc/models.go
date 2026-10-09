@@ -9,8 +9,8 @@ import (
 )
 
 type AuthFlow struct {
-	ID     int64
-	UserID pgtype.Int8
+	ID     pgtype.UUID
+	UserID pgtype.UUID
 	// 1=registration, 2=login, 3=recovery, 4=step_up_mfa
 	FlowType int16
 	// 1=pending_identifier, 2=pending_password, 3=pending_mfa, 4=pending_verification, 5=completed, 6=failed
@@ -24,8 +24,8 @@ type AuthFlow struct {
 }
 
 type BackupCode struct {
-	ID     int64
-	UserID int64
+	ID     pgtype.UUID
+	UserID pgtype.UUID
 	// Hash value using Argon2id
 	Code      []byte
 	UsedAt    pgtype.Timestamptz
@@ -33,8 +33,8 @@ type BackupCode struct {
 }
 
 type Identity struct {
-	ID     int64
-	UserID int64
+	ID     pgtype.UUID
+	UserID pgtype.UUID
 	// 1=google, 2=apple, 3=github, 4=facebook, 5=microsoft
 	Provider        int16
 	ProviderSubject string
@@ -44,8 +44,8 @@ type Identity struct {
 }
 
 type MfaFactor struct {
-	ID     int64
-	UserID int64
+	ID     pgtype.UUID
+	UserID pgtype.UUID
 	// 1=totp, 2=sms, 3=email, 4=webauthn, 5=backup_code
 	Type       int16
 	Name       string
@@ -56,8 +56,8 @@ type MfaFactor struct {
 }
 
 type Passkey struct {
-	ID           int64
-	UserID       int64
+	ID           pgtype.UUID
+	UserID       pgtype.UUID
 	CredentialID []byte
 	PublicKey    []byte
 	SignCount    int64
@@ -72,7 +72,7 @@ type Passkey struct {
 }
 
 type PasswordCredential struct {
-	UserID int64
+	UserID pgtype.UUID
 	// Hash value using Argon2id
 	Password          string
 	PasswordChangedAt pgtype.Timestamptz
@@ -81,20 +81,20 @@ type PasswordCredential struct {
 }
 
 type RefreshToken struct {
-	ID        int64
-	SessionID int64
+	ID        pgtype.UUID
+	SessionID pgtype.UUID
 	// Hash value using SHA-256 of the actual refresh token
 	Token      []byte
 	IssuedAt   pgtype.Timestamptz
 	ExpiresAt  pgtype.Timestamptz
 	RevokedAt  pgtype.Timestamptz
-	ReplacedBy pgtype.Int8
+	ReplacedBy pgtype.UUID
 	CreatedIp  pgtype.Text
 }
 
 type SecurityEvent struct {
-	ID     int64
-	UserID pgtype.Int8
+	ID     pgtype.UUID
+	UserID pgtype.UUID
 	// Examples: user.created, email.verified, login.failed, password.changed, mfa.enabled
 	EventType string
 	IpAddress pgtype.Text
@@ -104,8 +104,8 @@ type SecurityEvent struct {
 }
 
 type Session struct {
-	ID     int64
-	UserID int64
+	ID     pgtype.UUID
+	UserID pgtype.UUID
 	// Hash value using SHA-256 of the actual session token sent to client
 	Token         []byte
 	CreatedAt     pgtype.Timestamptz
@@ -118,7 +118,7 @@ type Session struct {
 }
 
 type TotpFactor struct {
-	FactorID int64
+	FactorID pgtype.UUID
 	// Encrypted value using AES-256-GCM or equivalent authenticated encryption
 	Secret []byte
 	// 1=SHA1, 2=SHA256, 3=SHA512
@@ -129,7 +129,7 @@ type TotpFactor struct {
 }
 
 type User struct {
-	ID int64
+	ID pgtype.UUID
 	// 1=active, 2=inactive, 3=locked, 4=suspended, 5=deleted
 	Status    int16
 	Name      string
@@ -141,8 +141,8 @@ type User struct {
 }
 
 type UserEmail struct {
-	ID     int64
-	UserID int64
+	ID     pgtype.UUID
+	UserID pgtype.UUID
 	Email  string
 	// User not allow two emails have is_primary=true
 	IsPrimary  bool
@@ -152,8 +152,8 @@ type UserEmail struct {
 }
 
 type UserPhoneNumber struct {
-	ID     int64
-	UserID int64
+	ID     pgtype.UUID
+	UserID pgtype.UUID
 	// Phone number stored in E.164 international format (+1234567890).
 	Phone      string
 	CreatedAt  pgtype.Timestamptz
@@ -162,9 +162,9 @@ type UserPhoneNumber struct {
 }
 
 type VerificationChallenge struct {
-	ID         int64
-	UserID     pgtype.Int8
-	FlowID     pgtype.Int8
+	ID         pgtype.UUID
+	UserID     pgtype.UUID
+	FlowID     pgtype.UUID
 	Identifier string
 	// 1=email_verification, 2=phone_verification, 3=mfa_verification, 4=password_reset
 	Purpose int16

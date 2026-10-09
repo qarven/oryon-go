@@ -21,8 +21,8 @@ const (
 )
 
 type SecurityEvent struct {
-	ID        int64
-	UserID    *int64
+	ID        ID
+	UserID    *ID
 	EventType SecurityEventType
 	IPAddress *string
 	UserAgent *string

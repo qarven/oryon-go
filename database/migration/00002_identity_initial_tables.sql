@@ -1,6 +1,6 @@
 -- +goose Up
 CREATE TABLE users (
-    id BIGINT PRIMARY KEY,
+    id UUID PRIMARY KEY,
     status SMALLINT NOT NULL,
     name TEXT NOT NULL,
     username TEXT,
@@ -13,8 +13,8 @@ COMMENT ON COLUMN users.status IS '1=active, 2=inactive, 3=locked, 4=suspended, 
 CREATE UNIQUE INDEX user_username_idx ON users(username) WHERE username IS NOT NULL;
 
 CREATE TABLE user_emails (
-    id BIGINT PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
     is_primary BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -27,8 +27,8 @@ CREATE UNIQUE INDEX user_emails_one_primary_idx ON user_emails(user_id) WHERE is
 COMMENT ON COLUMN user_emails.is_primary IS 'User not allow two emails have is_primary=true';
 
 CREATE TABLE user_phone_numbers (
-    id BIGINT PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     phone TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     verified_at TIMESTAMPTZ,
@@ -39,7 +39,7 @@ CREATE UNIQUE INDEX user_phone_numbers_phone_idx ON user_phone_numbers(phone) WH
 COMMENT ON COLUMN user_phone_numbers.phone IS 'Phone number stored in E.164 international format (+1234567890).';
 
 CREATE TABLE password_credentials (
-    user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     password TEXT NOT NULL,
     password_changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -48,8 +48,8 @@ CREATE TABLE password_credentials (
 COMMENT ON COLUMN password_credentials.password IS 'Hash value using Argon2id';
 
 CREATE TABLE identities (
-    id BIGINT PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     provider SMALLINT NOT NULL,
     provider_subject TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -62,8 +62,8 @@ CREATE UNIQUE INDEX identities_provider_subject_idx ON identities(provider, prov
 COMMENT ON COLUMN identities.provider IS '1=google, 2=apple, 3=github, 4=facebook, 5=microsoft';
 
 CREATE TABLE auth_flows (
-    id BIGINT PRIMARY KEY,
-    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE, -- Nullable initially if it's a registration flow
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE, -- Nullable initially if it's a registration flow
     flow_type SMALLINT NOT NULL,
     flow_state SMALLINT NOT NULL,
     ip_address TEXT,
@@ -79,8 +79,8 @@ COMMENT ON COLUMN auth_flows.flow_type IS '1=registration, 2=login, 3=recovery, 
 COMMENT ON COLUMN auth_flows.flow_state IS '1=pending_identifier, 2=pending_password, 3=pending_mfa, 4=pending_verification, 5=completed, 6=failed';
 
 CREATE TABLE sessions (
-    id BIGINT PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token BYTEA NOT NULL UNIQUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL,
@@ -95,21 +95,21 @@ CREATE INDEX sessions_active_idx ON sessions(user_id, expires_at) WHERE revoked_
 COMMENT ON COLUMN sessions.token IS 'Hash value using SHA-256 of the actual session token sent to client';
 
 CREATE TABLE refresh_tokens (
-    id BIGINT PRIMARY KEY,
-    session_id BIGINT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     token BYTEA NOT NULL UNIQUE,
     issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL,
     revoked_at TIMESTAMPTZ,
-    replaced_by BIGINT REFERENCES refresh_tokens(id),
+    replaced_by UUID REFERENCES refresh_tokens(id),
     created_ip TEXT
 );
 CREATE INDEX refresh_tokens_session_idx ON refresh_tokens(session_id);
 COMMENT ON COLUMN refresh_tokens.token IS 'Hash value using SHA-256 of the actual refresh token';
 
 CREATE TABLE passkeys (
-    id BIGINT PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     credential_id BYTEA NOT NULL UNIQUE,
     public_key BYTEA NOT NULL,
     sign_count BIGINT NOT NULL DEFAULT 0,
@@ -125,8 +125,8 @@ CREATE TABLE passkeys (
 CREATE INDEX passkeys_user_idx ON passkeys(user_id);
 
 CREATE TABLE mfa_factors (
-    id BIGINT PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     type SMALLINT NOT NULL,
     name TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -138,7 +138,7 @@ CREATE INDEX mfa_factors_user_idx ON mfa_factors(user_id);
 COMMENT ON COLUMN mfa_factors.type IS '1=totp, 2=sms, 3=email, 4=webauthn, 5=backup_code';
 
 CREATE TABLE totp_factors (
-    factor_id BIGINT PRIMARY KEY REFERENCES mfa_factors(id) ON DELETE CASCADE,
+    factor_id UUID PRIMARY KEY REFERENCES mfa_factors(id) ON DELETE CASCADE,
     secret BYTEA NOT NULL,
     algorithm SMALLINT NOT NULL DEFAULT 1,
     digits SMALLINT NOT NULL DEFAULT 6 CHECK (digits IN (6, 8)),
@@ -149,8 +149,8 @@ COMMENT ON COLUMN totp_factors.algorithm IS '1=SHA1, 2=SHA256, 3=SHA512';
 COMMENT ON COLUMN totp_factors.secret IS 'Encrypted value using AES-256-GCM or equivalent authenticated encryption';
 
 CREATE TABLE backup_codes (
-    id BIGINT PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     code BYTEA NOT NULL,
     used_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -159,9 +159,9 @@ CREATE INDEX backup_codes_user_idx ON backup_codes(user_id);
 COMMENT ON COLUMN backup_codes.code IS 'Hash value using Argon2id';
 
 CREATE TABLE verification_challenges (
-    id BIGINT PRIMARY KEY,
-    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
-    flow_id BIGINT REFERENCES auth_flows(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    flow_id UUID REFERENCES auth_flows(id) ON DELETE CASCADE,
     identifier TEXT NOT NULL, -- E.g., 'user@email.com' or '+1234567890' (critical for pre-registration flows)
     purpose SMALLINT NOT NULL,
     code BYTEA,
@@ -178,8 +178,8 @@ COMMENT ON COLUMN verification_challenges.purpose IS '1=email_verification, 2=ph
 COMMENT ON COLUMN verification_challenges.code IS 'Hash value using SHA-256 of the OTP or Magic Link token sent';
 
 CREATE TABLE security_events (
-    id BIGINT PRIMARY KEY,
-    user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    id UUID PRIMARY KEY,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     event_type TEXT NOT NULL,
     ip_address TEXT,
     user_agent TEXT,

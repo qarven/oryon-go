@@ -86,14 +86,6 @@ func (a *App) initLibraries() {
 	}
 
 	a.validator = validator
-
-	snow, err := uid.NewSnowflake()
-	if err != nil {
-		slog.Error("failed to init uid number snowflake", "error", err)
-		os.Exit(1)
-	}
-
-	a.uid = snow
 }
 
 func (a *App) initDatabase() {

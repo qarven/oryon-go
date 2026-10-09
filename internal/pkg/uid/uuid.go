@@ -1,8 +1,10 @@
 package uid
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+)
 
-// UUID generates RFC 4122 UUID strings.
+// UUID generates UUIDv7 identifiers.
 type UUID struct{}
 
 // NewUUID returns a UUID generator.
@@ -10,12 +12,15 @@ func NewUUID() *UUID {
 	return &UUID{}
 }
 
-// Generate returns a new UUID string.
+// Generate returns a new UUIDv7 as a string.
+// It panics if UUID generation fails.
 func (u *UUID) Generate() string {
-	id, err := uuid.NewV7()
+	idv7, err := uuid.NewV7()
 	if err != nil {
-		return uuid.NewString() // fallback: uuidV4
+		// uuid.NewV7 only fails if the system's random source is broken,
+		// which is unrecoverable.
+		panic("uid: generate UUIDv7: " + err.Error())
 	}
 
-	return id.String()
+	return idv7.String()
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/qarven/oryon-go/internal/identity/domain"
 	"github.com/qarven/oryon-go/internal/pkg/goerror"
@@ -32,6 +33,21 @@ type LoginMFA struct {
 type LoginOutput struct {
 	Token *LoginToken
 	MFA   *LoginMFA
+}
+
+type CreateLoginSessionData struct {
+	Session      domain.Session
+	RefreshToken domain.RefreshToken
+}
+
+type passwordLoginSessionData struct {
+	User        *domain.User
+	Meta        MetaInput
+	Session     domain.Session
+	Access      string
+	Refresh     string
+	RefreshHash []byte
+	Now         time.Time
 }
 
 func (a *Application) Login(ctx context.Context, input LoginInput) (*LoginOutput, error) {
@@ -70,13 +86,12 @@ func (a *Application) Login(ctx context.Context, input LoginInput) (*LoginOutput
 	}
 
 	if !a.argon2id.Verify(cred.Password, input.Password) {
-		a.logSecurityEvent(
-			ctx,
-			&cred.UserID,
-			domain.SecurityEventTypeLoginFailed,
-			input.Meta,
-			map[string]any{"reason": "invalid_password", securityEventIdentifierKey: input.Identifier},
-		)
+		a.securityEvent(domain.SecurityEventTypeLoginFailed).
+			ForUser(&cred.UserID).
+			WithMeta(input.Meta).
+			With("reason", "invalid_password").
+			With("identifier", input.Identifier).
+			Emit(ctx)
 		slog.WarnContext(ctx, "password credential is not match")
 
 		return nil, goerror.NewBusiness("invalid identifier or password", goerror.CodeUnauthorized)
@@ -94,6 +109,71 @@ func (a *Application) Login(ctx context.Context, input LoginInput) (*LoginOutput
 	}
 
 	return a.finishPasswordLogin(ctx, user, input.Meta)
+}
+
+func (a *Application) loginWithEmail(ctx context.Context, identifier string) (*domain.User, error) {
+	emailRec, err := a.repo.GetUserEmailByEmail(ctx, strings.ToLower(identifier))
+	if errors.Is(err, domain.ErrEmailNotFound) {
+		slog.WarnContext(ctx, "user emails not found")
+
+		return nil, goerror.NewBusiness("invalid identifier or password", goerror.CodeUnauthorized)
+	}
+
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to get user emails by email", "error", err)
+
+		return nil, goerror.NewServer(err)
+	}
+
+	user, err := a.repo.GetUserByID(ctx, emailRec.UserID)
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to get user by id", "error", err)
+
+		return nil, goerror.NewServer(err)
+	}
+
+	return user, nil
+}
+
+func (a *Application) loginWithUsername(ctx context.Context, identifier string) (*domain.User, error) {
+	user, err := a.repo.GetUserByUsername(ctx, identifier)
+	if errors.Is(err, domain.ErrUserNotFound) {
+		slog.WarnContext(ctx, "user not found by username")
+
+		return nil, goerror.NewBusiness("invalid identifier or password", goerror.CodeUnauthorized)
+	}
+
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to get user by username", "error", err)
+
+		return nil, goerror.NewServer(err)
+	}
+
+	return user, nil
+}
+
+func (a *Application) loginWithPhone(ctx context.Context, identifier string) (*domain.User, error) {
+	phoneRec, err := a.repo.GetUserPhoneByPhone(ctx, identifier)
+	if errors.Is(err, domain.ErrPhoneNotFound) {
+		slog.WarnContext(ctx, "user phone not found")
+
+		return nil, goerror.NewBusiness("invalid identifier or password", goerror.CodeUnauthorized)
+	}
+
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to get user phone by phone number", "error", err)
+
+		return nil, goerror.NewServer(err)
+	}
+
+	user, err := a.repo.GetUserByID(ctx, phoneRec.UserID)
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to get user by id", "error", err)
+
+		return nil, goerror.NewServer(err)
+	}
+
+	return user, nil
 }
 
 func (a *Application) resolveLoginUser(
@@ -146,7 +226,7 @@ func (a *Application) startMfaLogin(
 	}
 
 	flow := domain.AuthFlow{
-		ID:        a.uid.Generate(),
+		ID:        domain.IDFrom(a.uuid.Generate()),
 		UserID:    &user.ID,
 		FlowType:  domain.AuthFlowTypeLogin,
 		FlowState: domain.AuthFlowStatePendingMFA,
@@ -164,13 +244,11 @@ func (a *Application) startMfaLogin(
 		return nil, goerror.NewServer(err)
 	}
 
-	a.logSecurityEvent(
-		ctx,
-		&user.ID,
-		domain.SecurityEventTypeLoginMFARequired,
-		meta,
-		map[string]any{securityEventFlowIDKey: flow.ID},
-	)
+	a.securityEvent(domain.SecurityEventTypeLoginMFARequired).
+		ForUser(&user.ID).
+		WithMeta(meta).
+		With("flow_id", flow.ID).
+		Emit(ctx)
 
 	return &LoginOutput{MFA: &LoginMFA{
 		Flow:                flow,
@@ -205,7 +283,7 @@ func (a *Application) finishPasswordLogin(
 	}
 
 	session := domain.Session{
-		ID:         a.uid.Generate(),
+		ID:         domain.IDFrom(a.uuid.Generate()),
 		UserID:     user.ID,
 		TokenHash:  tokenHash,
 		CreatedAt:  now,
@@ -224,4 +302,42 @@ func (a *Application) finishPasswordLogin(
 		RefreshHash: refreshHash,
 		Now:         now,
 	})
+}
+
+func (a *Application) storePasswordLoginSession(
+	ctx context.Context,
+	data passwordLoginSessionData,
+) (*LoginOutput, error) {
+	err := a.repo.CreateLoginSession(ctx, CreateLoginSessionData{
+		Session: data.Session,
+		RefreshToken: domain.RefreshToken{
+			ID:        domain.IDFrom(a.uuid.Generate()),
+			SessionID: data.Session.ID,
+			TokenHash: data.RefreshHash,
+			IssuedAt:  data.Now,
+			ExpiresAt: data.Now.Add(a.config.GetDay("modules.identity.jwt.refresh.ttl")),
+			CreatedIP: &data.Meta.IPAddress,
+		},
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to create login session", "error", err)
+
+		return nil, goerror.NewServer(err)
+	}
+
+	a.securityEvent(domain.SecurityEventTypeLoginSuccess).
+		ForUser(&data.User.ID).
+		WithMeta(data.Meta).
+		With("method", "password").
+		Emit(ctx)
+
+	tokenExpiresIn := int64(a.config.GetMinute("modules.identity.jwt.access.ttl").Seconds())
+
+	return &LoginOutput{Token: &LoginToken{
+		AccessToken:  data.Access,
+		ExpiresIn:    tokenExpiresIn,
+		RefreshToken: data.Refresh,
+		Session:      data.Session,
+		User:         *data.User,
+	}}, nil
 }

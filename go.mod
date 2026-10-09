@@ -8,7 +8,6 @@ require (
 	connectrpc.com/grpchealth v1.5.0
 	connectrpc.com/grpcreflect v1.3.1
 	connectrpc.com/validate v0.7.0
-	github.com/bwmarrin/snowflake v0.3.0
 	github.com/exaring/otelpgx v0.12.1
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-playground/locales v0.14.2
@@ -19,7 +18,7 @@ require (
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/nats-io/nats.go v1.54.0
 	github.com/pquerna/otp v1.5.0
-	github.com/qarven/mono v0.1.6
+	github.com/qarven/mono v0.1.8-0.20261010084631-7e9540192042
 	github.com/redis/go-redis/v9 v9.23.0
 	github.com/rs/cors v1.11.1
 	github.com/spf13/viper v1.21.0
@@ -84,7 +83,7 @@ require (
 	go.uber.org/atomic v1.12.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20261007192929-f45ad48fbe92 // indirect
-	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect

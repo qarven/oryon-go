@@ -7,11 +7,11 @@ import (
 	"github.com/qarven/oryon-go/internal/pkg/sqlc"
 )
 
-func (p *Postgres) ListBackupCodesByUserID(ctx context.Context, userID int64) ([]domain.BackupCode, error) {
+func (p *Postgres) ListBackupCodesByUserID(ctx context.Context, userID domain.ID) ([]domain.BackupCode, error) {
 	ctx, span := p.ins.Tracer("identity.persistence").Start(ctx, "ListBackupCodesByUserID")
 	defer span.End()
 
-	rows, err := p.query.ListBackupCodesByUserID(ctx, userID)
+	rows, err := p.query.ListBackupCodesByUserID(ctx, pgUUID(userID))
 	if err != nil {
 		return nil, err
 	}
@@ -19,8 +19,8 @@ func (p *Postgres) ListBackupCodesByUserID(ctx context.Context, userID int64) ([
 	out := make([]domain.BackupCode, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, domain.BackupCode{
-			ID:        row.ID,
-			UserID:    row.UserID,
+			ID:        fromPgUUID(row.ID),
+			UserID:    fromPgUUID(row.UserID),
 			CodeHash:  row.Code,
 			UsedAt:    fromPgTz(row.UsedAt),
 			CreatedAt: row.CreatedAt.Time,
@@ -32,7 +32,7 @@ func (p *Postgres) ListBackupCodesByUserID(ctx context.Context, userID int64) ([
 
 func (p *Postgres) ListMfaFactorsByUserID(
 	ctx context.Context,
-	userID int64,
+	userID domain.ID,
 	includeRevoked bool,
 ) ([]domain.MfaFactor, error) {
 	ctx, span := p.ins.Tracer("identity.persistence").Start(ctx, "ListMfaFactorsByUserID")
@@ -43,9 +43,9 @@ func (p *Postgres) ListMfaFactorsByUserID(
 		err  error
 	)
 	if includeRevoked {
-		rows, err = p.query.ListMfaFactorsByUserID(ctx, userID)
+		rows, err = p.query.ListMfaFactorsByUserID(ctx, pgUUID(userID))
 	} else {
-		rows, err = p.query.ListMfaFactorsByUserIDActive(ctx, userID)
+		rows, err = p.query.ListMfaFactorsByUserIDActive(ctx, pgUUID(userID))
 	}
 
 	if err != nil {
@@ -55,8 +55,8 @@ func (p *Postgres) ListMfaFactorsByUserID(
 	out := make([]domain.MfaFactor, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, domain.MfaFactor{
-			ID:         row.ID,
-			UserID:     row.UserID,
+			ID:         fromPgUUID(row.ID),
+			UserID:     fromPgUUID(row.UserID),
 			Type:       domain.MfaFactorType(row.Type),
 			Name:       row.Name,
 			CreatedAt:  row.CreatedAt.Time,

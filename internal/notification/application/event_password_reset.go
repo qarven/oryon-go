@@ -9,7 +9,7 @@ type EventPasswordResetInput struct {
 	Name     string
 	Identity string
 	Channel  string
-	Code     string
+	Token    string
 }
 
 //nolint:forbidigo // ignore for now
@@ -19,8 +19,8 @@ func (a *Application) EventPasswordReset(ctx context.Context, input EventPasswor
 		name: %s
 		identity: %s
 		channel: %s
-		code: %s
-	`, input.Name, input.Identity, input.Channel, input.Code)
+		token: %s
+	`, input.Name, input.Identity, input.Channel, input.Token)
 
 	return nil
 }

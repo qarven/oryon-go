@@ -31,8 +31,7 @@ type App struct {
 	goroutine *goroutine.Manager
 	validator validator.Validator
 	clock     clock.Clocker
-	uuid      uid.StringID
-	uid       uid.NumberID
+	uuid      uid.ID
 
 	// resources
 	dbConn    *pgxpool.Pool

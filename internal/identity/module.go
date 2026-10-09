@@ -36,8 +36,7 @@ type Dependency struct {
 	Goroutine    *goroutine.Manager         `validate:"required"`
 	Config       config.Config              `validate:"required"`
 	Instrument   instrument.Instrumentation `validate:"required"`
-	UID          uid.NumberID               `validate:"required"`
-	UUID         uid.StringID               `validate:"required"`
+	UUID         uid.ID                     `validate:"required"`
 	Clock        clock.Clocker              `validate:"required"`
 	Validator    validator.Validator        `validate:"required"`
 	Interceptors []connectrpc.Interceptor   `validate:"required"`
@@ -86,7 +85,6 @@ func New(dep Dependency) (*Expose, error) {
 		Argon2ID:        hashers.argon2id,
 		SHA256:          hashers.sha256,
 		MfaEncryption:   mfaParts.encryption,
-		UID:             dep.UID,
 		UUID:            dep.UUID,
 		OTP:             mfaParts.totp,
 		Clock:           dep.Clock,

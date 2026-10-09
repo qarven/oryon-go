@@ -2,7 +2,6 @@ package jwt
 
 import (
 	"errors"
-	"strconv"
 	"time"
 
 	libJWT "github.com/golang-jwt/jwt/v5"
@@ -45,7 +44,7 @@ func (s *Symmetric) Issue(jti string, claim Claims) (string, error) {
 
 	token := libJWT.NewWithClaims(libJWT.SigningMethodHS512, Claims{
 		ID:        jti,
-		Subject:   strconv.FormatInt(claim.UserID, 10),
+		Subject:   claim.UserID,
 		Issuer:    s.issuer,
 		Audience:  s.audiences,
 		IssuedAt:  libJWT.NewNumericDate(now),

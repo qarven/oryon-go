@@ -10,11 +10,11 @@ import (
 	"github.com/qarven/oryon-go/internal/pkg/sqlc"
 )
 
-func (p *Postgres) GetUserByID(ctx context.Context, id int64) (*domain.User, error) {
+func (p *Postgres) GetUserByID(ctx context.Context, id domain.ID) (*domain.User, error) {
 	ctx, span := p.ins.Tracer("identity.persistence").Start(ctx, "GetUserByID")
 	defer span.End()
 
-	row, err := p.query.GetUserByID(ctx, id)
+	row, err := p.query.GetUserByID(ctx, pgUUID(id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrUserNotFound
 	}
@@ -24,7 +24,7 @@ func (p *Postgres) GetUserByID(ctx context.Context, id int64) (*domain.User, err
 	}
 
 	return &domain.User{
-		ID:        row.ID,
+		ID:        fromPgUUID(row.ID),
 		Status:    domain.UserStatus(row.Status),
 		Name:      row.Name,
 		Username:  fromPgText(row.Username),
@@ -49,7 +49,7 @@ func (p *Postgres) GetUserByUsername(ctx context.Context, username string) (*dom
 	}
 
 	return &domain.User{
-		ID:        row.ID,
+		ID:        fromPgUUID(row.ID),
 		Status:    domain.UserStatus(row.Status),
 		Name:      row.Name,
 		Username:  fromPgText(row.Username),
@@ -74,8 +74,8 @@ func (p *Postgres) GetUserEmailByEmail(ctx context.Context, email string) (*doma
 	}
 
 	return &domain.UserEmail{
-		ID:         row.ID,
-		UserID:     row.UserID,
+		ID:         fromPgUUID(row.ID),
+		UserID:     fromPgUUID(row.UserID),
 		Email:      row.Email,
 		IsPrimary:  row.IsPrimary,
 		CreatedAt:  row.CreatedAt.Time,
@@ -84,11 +84,11 @@ func (p *Postgres) GetUserEmailByEmail(ctx context.Context, email string) (*doma
 	}, nil
 }
 
-func (p *Postgres) GetPrimaryUserEmailByUserID(ctx context.Context, userID int64) (*domain.UserEmail, error) {
+func (p *Postgres) GetPrimaryUserEmailByUserID(ctx context.Context, userID domain.ID) (*domain.UserEmail, error) {
 	ctx, span := p.ins.Tracer("identity.persistence").Start(ctx, "GetPrimaryUserEmailByUserID")
 	defer span.End()
 
-	row, err := p.query.GetPrimaryUserEmailByUserID(ctx, userID)
+	row, err := p.query.GetPrimaryUserEmailByUserID(ctx, pgUUID(userID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrPrimaryEmailNotFound
 	}
@@ -98,8 +98,8 @@ func (p *Postgres) GetPrimaryUserEmailByUserID(ctx context.Context, userID int64
 	}
 
 	return &domain.UserEmail{
-		ID:         row.ID,
-		UserID:     row.UserID,
+		ID:         fromPgUUID(row.ID),
+		UserID:     fromPgUUID(row.UserID),
 		Email:      row.Email,
 		IsPrimary:  row.IsPrimary,
 		CreatedAt:  row.CreatedAt.Time,
@@ -122,8 +122,8 @@ func (p *Postgres) GetUserPhoneByPhone(ctx context.Context, phone string) (*doma
 	}
 
 	return &domain.UserPhoneNumber{
-		ID:         row.ID,
-		UserID:     row.UserID,
+		ID:         fromPgUUID(row.ID),
+		UserID:     fromPgUUID(row.UserID),
 		Phone:      row.Phone,
 		CreatedAt:  row.CreatedAt.Time,
 		VerifiedAt: fromPgTz(row.VerifiedAt),
@@ -133,12 +133,12 @@ func (p *Postgres) GetUserPhoneByPhone(ctx context.Context, phone string) (*doma
 
 func (p *Postgres) GetPasswordCredentialByUserID(
 	ctx context.Context,
-	userID int64,
+	userID domain.ID,
 ) (*domain.PasswordCredential, error) {
 	ctx, span := p.ins.Tracer("identity.persistence").Start(ctx, "GetPasswordCredentialByUserID")
 	defer span.End()
 
-	row, err := p.query.GetPasswordCredentialByUserID(ctx, userID)
+	row, err := p.query.GetPasswordCredentialByUserID(ctx, pgUUID(userID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrPasswordCredentialNotFound
 	}
@@ -148,7 +148,7 @@ func (p *Postgres) GetPasswordCredentialByUserID(
 	}
 
 	return &domain.PasswordCredential{
-		UserID:            row.UserID,
+		UserID:            fromPgUUID(row.UserID),
 		Password:          row.Password,
 		PasswordChangedAt: row.PasswordChangedAt.Time,
 		CreatedAt:         row.CreatedAt.Time,
@@ -156,11 +156,11 @@ func (p *Postgres) GetPasswordCredentialByUserID(
 	}, nil
 }
 
-func (p *Postgres) GetSessionByID(ctx context.Context, id int64) (*domain.Session, error) {
+func (p *Postgres) GetSessionByID(ctx context.Context, id domain.ID) (*domain.Session, error) {
 	ctx, span := p.ins.Tracer("identity.persistence").Start(ctx, "GetSessionByID")
 	defer span.End()
 
-	row, err := p.query.GetSessionByID(ctx, id)
+	row, err := p.query.GetSessionByID(ctx, pgUUID(id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrSessionNotFound
 	}
@@ -170,8 +170,8 @@ func (p *Postgres) GetSessionByID(ctx context.Context, id int64) (*domain.Sessio
 	}
 
 	return &domain.Session{
-		ID:            row.ID,
-		UserID:        row.UserID,
+		ID:            fromPgUUID(row.ID),
+		UserID:        fromPgUUID(row.UserID),
 		TokenHash:     row.Token,
 		CreatedAt:     row.CreatedAt.Time,
 		ExpiresAt:     row.ExpiresAt.Time,
@@ -197,22 +197,22 @@ func (p *Postgres) GetRefreshTokenByHash(ctx context.Context, hash []byte) (*dom
 	}
 
 	return &domain.RefreshToken{
-		ID:         row.ID,
-		SessionID:  row.SessionID,
+		ID:         fromPgUUID(row.ID),
+		SessionID:  fromPgUUID(row.SessionID),
 		TokenHash:  row.Token,
 		IssuedAt:   row.IssuedAt.Time,
 		ExpiresAt:  row.ExpiresAt.Time,
 		RevokedAt:  fromPgTz(row.RevokedAt),
-		ReplacedBy: fromPgInt8(row.ReplacedBy),
+		ReplacedBy: fromPgUUIDPtr(row.ReplacedBy),
 		CreatedIP:  fromPgText(row.CreatedIp),
 	}, nil
 }
 
-func (p *Postgres) GetAuthFlowByID(ctx context.Context, id int64) (*domain.AuthFlow, error) {
+func (p *Postgres) GetAuthFlowByID(ctx context.Context, id domain.ID) (*domain.AuthFlow, error) {
 	ctx, span := p.ins.Tracer("identity.persistence").Start(ctx, "GetAuthFlowByID")
 	defer span.End()
 
-	row, err := p.query.GetAuthFlowByID(ctx, id)
+	row, err := p.query.GetAuthFlowByID(ctx, pgUUID(id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrAuthFlowNotFound
 	}
@@ -230,8 +230,8 @@ func (p *Postgres) GetAuthFlowByID(ctx context.Context, id int64) (*domain.AuthF
 	}
 
 	return &domain.AuthFlow{
-		ID:          row.ID,
-		UserID:      fromPgInt8(row.UserID),
+		ID:          fromPgUUID(row.ID),
+		UserID:      fromPgUUIDPtr(row.UserID),
 		FlowType:    domain.AuthFlowType(row.FlowType),
 		FlowState:   domain.AuthFlowState(row.FlowState),
 		IPAddress:   fromPgText(row.IpAddress),
@@ -243,11 +243,11 @@ func (p *Postgres) GetAuthFlowByID(ctx context.Context, id int64) (*domain.AuthF
 	}, nil
 }
 
-func (p *Postgres) GetTotpFactorByFactorID(ctx context.Context, factorID int64) (*domain.TotpFactor, error) {
+func (p *Postgres) GetTotpFactorByFactorID(ctx context.Context, factorID domain.ID) (*domain.TotpFactor, error) {
 	ctx, span := p.ins.Tracer("identity.persistence").Start(ctx, "GetTotpFactorByFactorID")
 	defer span.End()
 
-	row, err := p.query.GetTotpFactorByFactorID(ctx, factorID)
+	row, err := p.query.GetTotpFactorByFactorID(ctx, pgUUID(factorID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrTotpFactorNotFound
 	}
@@ -257,7 +257,7 @@ func (p *Postgres) GetTotpFactorByFactorID(ctx context.Context, factorID int64) 
 	}
 
 	return &domain.TotpFactor{
-		FactorID:  row.FactorID,
+		FactorID:  fromPgUUID(row.FactorID),
 		Secret:    row.Secret,
 		Algorithm: domain.TotpAlgorithmFrom(row.Algorithm),
 		Digits:    row.Digits,
@@ -268,12 +268,12 @@ func (p *Postgres) GetTotpFactorByFactorID(ctx context.Context, factorID int64) 
 
 func (p *Postgres) GetVerificationChallengeByID(
 	ctx context.Context,
-	id int64,
+	id domain.ID,
 ) (*domain.VerificationChallenge, error) {
 	ctx, span := p.ins.Tracer("identity.persistence").Start(ctx, "GetVerificationChallengeByID")
 	defer span.End()
 
-	row, err := p.query.GetVerificationChallengeByID(ctx, id)
+	row, err := p.query.GetVerificationChallengeByID(ctx, pgUUID(id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrVerificationNotFound
 	}
@@ -289,9 +289,9 @@ func (p *Postgres) GetVerificationChallengeByID(
 
 func toVerificationChallenge(row sqlc.VerificationChallenge) domain.VerificationChallenge {
 	return domain.VerificationChallenge{
-		ID:          row.ID,
-		UserID:      fromPgInt8(row.UserID),
-		FlowID:      fromPgInt8(row.FlowID),
+		ID:          fromPgUUID(row.ID),
+		UserID:      fromPgUUIDPtr(row.UserID),
+		FlowID:      fromPgUUIDPtr(row.FlowID),
 		Identifier:  row.Identifier,
 		Purpose:     domain.VerificationPurpose(row.Purpose),
 		CodeHash:    row.Code,

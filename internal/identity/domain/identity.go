@@ -34,8 +34,8 @@ func (p IdentityProvider) IsValid() bool {
 }
 
 type Identity struct {
-	ID              int64
-	UserID          int64
+	ID              ID
+	UserID          ID
 	Provider        IdentityProvider
 	ProviderSubject string
 	CreatedAt       time.Time

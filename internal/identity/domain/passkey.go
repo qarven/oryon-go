@@ -10,8 +10,8 @@ var (
 )
 
 type Passkey struct {
-	ID           int64
-	UserID       int64
+	ID           ID
+	UserID       ID
 	CredentialID []byte
 	PublicKey    []byte
 	SignCount    int64

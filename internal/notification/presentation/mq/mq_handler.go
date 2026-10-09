@@ -88,7 +88,7 @@ func (h *MQHandler) PasswordResetConsumer(ctx context.Context, msg messaging.Mes
 		Name:     payload.Name,
 		Identity: payload.Identity,
 		Channel:  payload.Channel,
-		Code:     payload.Code,
+		Token:    payload.Token,
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to process event password reset", "error", err)

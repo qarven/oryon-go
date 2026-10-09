@@ -10,7 +10,7 @@ var (
 )
 
 type PasswordCredential struct {
-	UserID            int64
+	UserID            ID
 	Password          string
 	PasswordChangedAt time.Time
 	CreatedAt         time.Time

@@ -172,3 +172,21 @@ DELETE FROM verification_challenges WHERE expires_at < NOW() AND consumed_at IS 
 
 -- name: DeleteExpiredAuthFlows :exec
 DELETE FROM auth_flows WHERE expires_at < NOW() AND completed_at IS NULL;
+
+-- name: ListPasskeysByUserID :many
+SELECT id, user_id, credential_id, public_key, sign_count, name, aaguid, transports, device_type, backed_up, created_at, last_used_at, revoked_at
+FROM passkeys
+WHERE user_id = @user_id
+ORDER BY created_at;
+
+-- name: ListPasskeysByUserIDActive :many
+SELECT id, user_id, credential_id, public_key, sign_count, name, aaguid, transports, device_type, backed_up, created_at, last_used_at, revoked_at
+FROM passkeys
+WHERE user_id = @user_id AND revoked_at IS NULL
+ORDER BY created_at;
+
+-- name: UpdatePasskeyLogin :exec
+UPDATE passkeys SET sign_count = @sign_count, last_used_at = @last_used_at WHERE id = @id;
+
+-- name: UpdateAuthFlowContext :exec
+UPDATE auth_flows SET context = @context WHERE id = @id;

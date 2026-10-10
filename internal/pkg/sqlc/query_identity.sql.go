@@ -689,6 +689,88 @@ func (q *Queries) ListMfaFactorsByUserIDActive(ctx context.Context, userID pgtyp
 	return items, nil
 }
 
+const listPasskeysByUserID = `-- name: ListPasskeysByUserID :many
+SELECT id, user_id, credential_id, public_key, sign_count, name, aaguid, transports, device_type, backed_up, created_at, last_used_at, revoked_at
+FROM passkeys
+WHERE user_id = $1
+ORDER BY created_at
+`
+
+func (q *Queries) ListPasskeysByUserID(ctx context.Context, userID pgtype.UUID) ([]Passkey, error) {
+	rows, err := q.db.Query(ctx, listPasskeysByUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Passkey
+	for rows.Next() {
+		var i Passkey
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.CredentialID,
+			&i.PublicKey,
+			&i.SignCount,
+			&i.Name,
+			&i.Aaguid,
+			&i.Transports,
+			&i.DeviceType,
+			&i.BackedUp,
+			&i.CreatedAt,
+			&i.LastUsedAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPasskeysByUserIDActive = `-- name: ListPasskeysByUserIDActive :many
+SELECT id, user_id, credential_id, public_key, sign_count, name, aaguid, transports, device_type, backed_up, created_at, last_used_at, revoked_at
+FROM passkeys
+WHERE user_id = $1 AND revoked_at IS NULL
+ORDER BY created_at
+`
+
+func (q *Queries) ListPasskeysByUserIDActive(ctx context.Context, userID pgtype.UUID) ([]Passkey, error) {
+	rows, err := q.db.Query(ctx, listPasskeysByUserIDActive, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Passkey
+	for rows.Next() {
+		var i Passkey
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.CredentialID,
+			&i.PublicKey,
+			&i.SignCount,
+			&i.Name,
+			&i.Aaguid,
+			&i.Transports,
+			&i.DeviceType,
+			&i.BackedUp,
+			&i.CreatedAt,
+			&i.LastUsedAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPendingVerificationChallengesByIdentifier = `-- name: ListPendingVerificationChallengesByIdentifier :many
 SELECT id, user_id, flow_id, identifier, purpose, code, attempts, max_attempts, ip_address, expires_at, consumed_at, created_at
 FROM verification_challenges
@@ -794,6 +876,20 @@ func (q *Queries) UpdateAuthFlow(ctx context.Context, arg UpdateAuthFlowParams) 
 	return err
 }
 
+const updateAuthFlowContext = `-- name: UpdateAuthFlowContext :exec
+UPDATE auth_flows SET context = $1 WHERE id = $2
+`
+
+type UpdateAuthFlowContextParams struct {
+	Context []byte
+	ID      pgtype.UUID
+}
+
+func (q *Queries) UpdateAuthFlowContext(ctx context.Context, arg UpdateAuthFlowContextParams) error {
+	_, err := q.db.Exec(ctx, updateAuthFlowContext, arg.Context, arg.ID)
+	return err
+}
+
 const updateMfaFactorLastUsedAt = `-- name: UpdateMfaFactorLastUsedAt :exec
 UPDATE mfa_factors SET last_used_at = $1 WHERE id = $2
 `
@@ -805,6 +901,21 @@ type UpdateMfaFactorLastUsedAtParams struct {
 
 func (q *Queries) UpdateMfaFactorLastUsedAt(ctx context.Context, arg UpdateMfaFactorLastUsedAtParams) error {
 	_, err := q.db.Exec(ctx, updateMfaFactorLastUsedAt, arg.LastUsedAt, arg.ID)
+	return err
+}
+
+const updatePasskeyLogin = `-- name: UpdatePasskeyLogin :exec
+UPDATE passkeys SET sign_count = $1, last_used_at = $2 WHERE id = $3
+`
+
+type UpdatePasskeyLoginParams struct {
+	SignCount  int64
+	LastUsedAt pgtype.Timestamptz
+	ID         pgtype.UUID
+}
+
+func (q *Queries) UpdatePasskeyLogin(ctx context.Context, arg UpdatePasskeyLoginParams) error {
+	_, err := q.db.Exec(ctx, updatePasskeyLogin, arg.SignCount, arg.LastUsedAt, arg.ID)
 	return err
 }
 

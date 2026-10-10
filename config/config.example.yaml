@@ -51,6 +51,8 @@ app:
         "/oryon.identity.v1.AuthenticationService/Login",
         "/oryon.identity.v1.AuthenticationService/RefreshToken",
         "/oryon.identity.v1.AuthenticationService/CompleteLoginMfa",
+        "/oryon.identity.v1.AuthenticationService/BeginWebAuthnLogin",
+        "/oryon.identity.v1.AuthenticationService/CompleteWebAuthnLogin",
         "/oryon.identity.v1.SessionService/Logout",
       ]
 
@@ -271,6 +273,17 @@ modules:
 
         # Allowed clock skew (number of steps)
         skew: 1
+
+    # WebAuthn (passkey) Relying Party configuration
+    webauthn:
+      # Effective domain of the relying party (no scheme or port)
+      rp_id: "localhost"
+
+      # Display name shown by authenticators
+      rp_display_name: "ORYON"
+
+      # Fully qualified frontend origins permitted to complete ceremonies
+      rp_origins: ["http://localhost:3000"]
 
     # Hashing & Cryptography Configuration
     hash:

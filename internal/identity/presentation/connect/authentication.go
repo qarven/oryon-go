@@ -33,10 +33,18 @@ type passwordResetService interface {
 		*application.CompletePasswordResetOutput, error)
 }
 
+type webauthnService interface {
+	BeginWebAuthnLogin(ctx context.Context, input application.BeginWebAuthnLoginInput) (
+		*application.BeginWebAuthnLoginOutput, error)
+	CompleteWebAuthnLogin(ctx context.Context, input application.CompleteWebAuthnLoginInput) (
+		*application.CompleteWebAuthnLoginOutput, error)
+}
+
 type AuthenticationService interface {
 	registerService
 	loginService
 	passwordResetService
+	webauthnService
 }
 
 type AuthenticationServer struct {
@@ -232,6 +240,71 @@ func (s *AuthenticationServer) CompleteLoginMfa(
 	}
 
 	return &v1.CompleteLoginMfaResponse{
+		Token: &v1.Token{
+			AccessToken:  out.Token,
+			RefreshToken: out.RefreshToken,
+			TokenType:    domain.TokenType,
+			ExpiresIn:    out.TokenExpiresIn,
+		},
+		User: &v1.User{
+			Id:        out.User.ID.String(),
+			Status:    fromUserStatus(out.User.Status),
+			Name:      out.User.Name,
+			Username:  out.User.Username,
+			AvatarUrl: out.User.AvatarURL,
+			CreatedAt: timestamppb.New(out.User.CreatedAt),
+			UpdatedAt: timestamppb.New(out.User.UpdatedAt),
+		},
+	}, nil
+}
+
+func (s *AuthenticationServer) BeginWebAuthnLogin(
+	ctx context.Context,
+	req *v1.BeginWebAuthnLoginRequest,
+) (*v1.BeginWebAuthnLoginResponse, error) {
+	requestMeta := meta.GetMeta(ctx)
+
+	out, err := s.service.BeginWebAuthnLogin(ctx, application.BeginWebAuthnLoginInput{
+		FlowID: domain.IDFrom(req.GetFlowId()),
+		Meta: application.MetaInput{
+			IPAddress: requestMeta.Peer(),
+			UserAgent: requestMeta.UserAgent(),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &v1.BeginWebAuthnLoginResponse{
+		Flow: &v1.AuthFlow{
+			Id:        out.Flow.ID.String(),
+			FlowType:  fromAuthFlowType(out.Flow.FlowType),
+			FlowState: fromAuthFlowState(out.Flow.FlowState),
+			ExpiresAt: timestamppb.New(out.Flow.ExpiresAt),
+		},
+		RequestOptionsJson: out.RequestOptionsJSON,
+	}, nil
+}
+
+func (s *AuthenticationServer) CompleteWebAuthnLogin(
+	ctx context.Context,
+	req *v1.CompleteWebAuthnLoginRequest,
+) (*v1.CompleteWebAuthnLoginResponse, error) {
+	requestMeta := meta.GetMeta(ctx)
+
+	out, err := s.service.CompleteWebAuthnLogin(ctx, application.CompleteWebAuthnLoginInput{
+		FlowID:                domain.IDFrom(req.GetFlowId()),
+		AssertionResponseJSON: req.GetAssertionResponseJson(),
+		Meta: application.MetaInput{
+			IPAddress: requestMeta.Peer(),
+			UserAgent: requestMeta.UserAgent(),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &v1.CompleteWebAuthnLoginResponse{
 		Token: &v1.Token{
 			AccessToken:  out.Token,
 			RefreshToken: out.RefreshToken,

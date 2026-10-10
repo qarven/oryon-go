@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/qarven/oryon-go/internal/identity/domain"
 	"github.com/qarven/oryon-go/internal/pkg/clock"
 	"github.com/qarven/oryon-go/internal/pkg/config"
@@ -51,6 +52,7 @@ type GetUserRepository interface {
 type ListRepository interface {
 	ListMfaFactorsByUserID(ctx context.Context, userID domain.ID, includeRevoked bool) ([]domain.MfaFactor, error)
 	ListBackupCodesByUserID(ctx context.Context, userID domain.ID) ([]domain.BackupCode, error)
+	ListPasskeysByUserID(ctx context.Context, userID domain.ID, includeRevoked bool) ([]domain.Passkey, error)
 	ListPendingChallengesByIdentifier(
 		ctx context.Context,
 		identifier string,
@@ -67,6 +69,8 @@ type CreateRepository interface {
 // UpdateRepository groups single-row, non-transactional mutations.
 type UpdateRepository interface {
 	UpdateVerificationChallenge(ctx context.Context, vc domain.VerificationChallenge) error
+	UpdatePasskeyLogin(ctx context.Context, id domain.ID, signCount int64, lastUsedAt time.Time) error
+	UpdateAuthFlowContext(ctx context.Context, id domain.ID, flowCtx map[string]any) error
 }
 
 type Repository interface {
@@ -98,6 +102,7 @@ type Dependency struct {
 	UUID            uid.ID
 	Clock           clock.Clocker
 	OTP             mfa.OTP
+	WebAuthn        *webauthn.WebAuthn
 	AccessJWT       jwt.JWT
 	RefreshJWT      jwt.JWT
 	Instrument      instrument.Instrumentation
@@ -116,6 +121,7 @@ type Application struct {
 	uuid          uid.ID
 	clock         clock.Clocker
 	otp           mfa.OTP
+	webauthn      *webauthn.WebAuthn
 	accessJWT     jwt.JWT
 	refreshJWT    jwt.JWT
 	ins           instrument.Instrumentation
@@ -135,6 +141,7 @@ func New(dep Dependency) *Application {
 		uuid:          dep.UUID,
 		clock:         dep.Clock,
 		otp:           dep.OTP,
+		webauthn:      dep.WebAuthn,
 		accessJWT:     dep.AccessJWT,
 		refreshJWT:    dep.RefreshJWT,
 		ins:           dep.Instrument,

@@ -94,3 +94,51 @@ func (p *Postgres) ListPendingChallengesByIdentifier(
 
 	return out, nil
 }
+
+func (p *Postgres) ListPasskeysByUserID(
+	ctx context.Context,
+	userID domain.ID,
+	includeRevoked bool,
+) ([]domain.Passkey, error) {
+	ctx, span := p.ins.Tracer("identity.persistence").Start(ctx, "ListPasskeysByUserID")
+	defer span.End()
+
+	var (
+		rows []sqlc.Passkey
+		err  error
+	)
+	if includeRevoked {
+		rows, err = p.query.ListPasskeysByUserID(ctx, pgUUID(userID))
+	} else {
+		rows, err = p.query.ListPasskeysByUserIDActive(ctx, pgUUID(userID))
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]domain.Passkey, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toPasskey(row))
+	}
+
+	return out, nil
+}
+
+func toPasskey(row sqlc.Passkey) domain.Passkey {
+	return domain.Passkey{
+		ID:           fromPgUUID(row.ID),
+		UserID:       fromPgUUID(row.UserID),
+		CredentialID: row.CredentialID,
+		PublicKey:    row.PublicKey,
+		SignCount:    row.SignCount,
+		Name:         row.Name,
+		AAGUID:       fromPgText(row.Aaguid),
+		Transports:   row.Transports,
+		DeviceType:   fromPgText(row.DeviceType),
+		BackedUp:     row.BackedUp,
+		CreatedAt:    row.CreatedAt.Time,
+		LastUsedAt:   fromPgTz(row.LastUsedAt),
+		RevokedAt:    fromPgTz(row.RevokedAt),
+	}
+}

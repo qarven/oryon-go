@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	connectv2 "connectrpc.com/connect/v2"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	pquernaotp "github.com/pquerna/otp"
 	"github.com/qarven/mono/gen/go/oryon/identity/v1/identityconnect"
@@ -71,6 +72,11 @@ func New(dep Dependency) (*Expose, error) {
 		return nil, err
 	}
 
+	webauthn, err := newWebAuthn(dep.Config)
+	if err != nil {
+		return nil, err
+	}
+
 	// infrastructure
 	repository := postgres.New(dep.DBConn, dep.Instrument)
 	cacheRepo := redis.New(dep.CacheConn, dep.Instrument)
@@ -88,6 +94,7 @@ func New(dep Dependency) (*Expose, error) {
 		MfaEncryption:   mfaParts.encryption,
 		UUID:            dep.UUID,
 		OTP:             mfaParts.totp,
+		WebAuthn:        webauthn,
 		Clock:           dep.Clock,
 		AccessJWT:       tokens.access,
 		RefreshJWT:      tokens.refresh,
@@ -179,4 +186,17 @@ func newTokenPair(cfg config.Config, clk clock.Clocker) (*tokenPair, error) {
 	}
 
 	return &tokenPair{access: accessJWT, refresh: refreshJWT}, nil
+}
+
+func newWebAuthn(cfg config.Config) (*webauthn.WebAuthn, error) {
+	authn, err := webauthn.New(&webauthn.Config{
+		RPID:          cfg.GetString("modules.identity.webauthn.rp_id"),
+		RPDisplayName: cfg.GetString("modules.identity.webauthn.rp_display_name"),
+		RPOrigins:     cfg.GetArray("modules.identity.webauthn.rp_origins"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create webauthn: %w", err)
+	}
+
+	return authn, nil
 }

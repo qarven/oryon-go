@@ -110,7 +110,7 @@ COMMENT ON COLUMN refresh_tokens.token IS 'Hash value using SHA-256 of the actua
 CREATE TABLE passkeys (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    credential_id BYTEA NOT NULL UNIQUE,
+    credential_id BYTEA NOT NULL,
     public_key BYTEA NOT NULL,
     sign_count BIGINT NOT NULL DEFAULT 0,
     name TEXT NOT NULL,
@@ -123,6 +123,8 @@ CREATE TABLE passkeys (
     revoked_at TIMESTAMPTZ
 );
 CREATE INDEX passkeys_user_idx ON passkeys(user_id);
+CREATE INDEX passkeys_user_active_idx ON passkeys (user_id) WHERE revoked_at IS NULL;
+CREATE UNIQUE INDEX passkeys_credential_active_uniq ON passkeys (credential_id) WHERE revoked_at IS NULL;
 
 CREATE TABLE mfa_factors (
     id UUID PRIMARY KEY,

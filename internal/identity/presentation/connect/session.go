@@ -3,7 +3,6 @@ package connect
 import (
 	"context"
 
-	"connectrpc.com/connect"
 	v1 "github.com/qarven/mono/gen/go/oryon/identity/v1"
 	"github.com/qarven/mono/gen/go/oryon/identity/v1/identityconnect"
 	"github.com/qarven/oryon-go/internal/identity/application"
@@ -26,14 +25,11 @@ func NewSessionServer(service sessionService, config config.Config) *SessionServ
 	return &SessionServer{service: service, config: config}
 }
 
-func (s *SessionServer) Logout(
-	ctx context.Context,
-	req *connect.Request[v1.LogoutRequest],
-) (*connect.Response[v1.LogoutResponse], error) {
+func (s *SessionServer) Logout(ctx context.Context, req *v1.LogoutRequest) (*v1.LogoutResponse, error) {
 	requestMeta := meta.GetMeta(ctx)
 
 	_, err := s.service.Logout(ctx, application.LogoutInput{
-		RefreshToken: req.Msg.GetRefreshToken(),
+		RefreshToken: req.GetRefreshToken(),
 		Meta: application.MetaInput{
 			IPAddress: requestMeta.Peer(),
 			UserAgent: requestMeta.UserAgent(),
@@ -43,5 +39,5 @@ func (s *SessionServer) Logout(
 		return nil, err
 	}
 
-	return connect.NewResponse(&v1.LogoutResponse{}), nil
+	return &v1.LogoutResponse{}, nil
 }

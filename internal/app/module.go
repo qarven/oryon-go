@@ -11,17 +11,16 @@ import (
 func (a *App) initModules() {
 	if a.config.GetBool("modules.identity.enabled") {
 		expose, err := identity.New(identity.Dependency{
-			Config:       a.config,
-			Instrument:   a.ins,
-			UUID:         a.uuid,
-			Clock:        a.clock,
-			Validator:    a.validator,
-			DBConn:       a.dbConn,
-			CacheConn:    a.cacheConn,
-			Messaging:    a.messaging,
-			Goroutine:    a.goroutine,
-			Interceptors: a.interceptors,
-			Muxer:        a.muxer,
+			Config:     a.config,
+			Instrument: a.ins,
+			UUID:       a.uuid,
+			Clock:      a.clock,
+			Validator:  a.validator,
+			DBConn:     a.dbConn,
+			CacheConn:  a.cacheConn,
+			Messaging:  a.messaging,
+			Goroutine:  a.goroutine,
+			Server:     a.connectServer,
 		})
 		if err != nil {
 			slog.Error("failed to init module identity", "error", err)

@@ -3,12 +3,10 @@ package connect
 import (
 	"context"
 
-	"connectrpc.com/connect"
 	v1 "github.com/qarven/mono/gen/go/oryon/identity/v1"
 	"github.com/qarven/mono/gen/go/oryon/identity/v1/identityconnect"
 	"github.com/qarven/oryon-go/internal/identity/application"
 	"github.com/qarven/oryon-go/internal/identity/domain"
-	"github.com/qarven/oryon-go/internal/pkg/config"
 	"github.com/qarven/oryon-go/internal/pkg/meta"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -45,24 +43,23 @@ type AuthenticationServer struct {
 	identityconnect.UnimplementedAuthenticationServiceHandler
 
 	service AuthenticationService
-	config  config.Config
 }
 
-func NewAuthenticationServer(service AuthenticationService, config config.Config) *AuthenticationServer {
-	return &AuthenticationServer{service: service, config: config}
+func NewAuthenticationServer(service AuthenticationService) *AuthenticationServer {
+	return &AuthenticationServer{service: service}
 }
 
 func (s *AuthenticationServer) Registration(
 	ctx context.Context,
-	req *connect.Request[v1.RegistrationRequest],
-) (*connect.Response[v1.RegistrationResponse], error) {
+	req *v1.RegistrationRequest,
+) (*v1.RegistrationResponse, error) {
 	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.Registration(ctx, application.RegistrationInput{
-		Email:    req.Msg.Email,
-		Password: req.Msg.GetPassword(),
-		Name:     req.Msg.GetName(),
-		Phone:    req.Msg.Phone,
+		Email:    req.Email,
+		Password: req.GetPassword(),
+		Name:     req.GetName(),
+		Phone:    req.Phone,
 		Meta: application.MetaInput{
 			IPAddress: requestMeta.Peer(),
 			UserAgent: requestMeta.UserAgent(),
@@ -72,24 +69,24 @@ func (s *AuthenticationServer) Registration(
 		return nil, err
 	}
 
-	return connect.NewResponse(&v1.RegistrationResponse{Flow: &v1.AuthFlow{
+	return &v1.RegistrationResponse{Flow: &v1.AuthFlow{
 		Id:        out.Flow.ID.String(),
 		FlowType:  fromAuthFlowType(out.Flow.FlowType),
 		FlowState: fromAuthFlowState(out.Flow.FlowState),
 		ExpiresAt: timestamppb.New(out.Flow.ExpiresAt),
-	}}), nil
+	}}, nil
 }
 
 func (s *AuthenticationServer) CompleteRegistration(
 	ctx context.Context,
-	req *connect.Request[v1.CompleteRegistrationRequest],
-) (*connect.Response[v1.CompleteRegistrationResponse], error) {
+	req *v1.CompleteRegistrationRequest,
+) (*v1.CompleteRegistrationResponse, error) {
 	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.CompleteRegistration(ctx, application.CompleteRegistrationInput{
-		FlowID:    domain.IDFrom(req.Msg.GetFlowId()),
-		EmailCode: req.Msg.EmailCode,
-		PhoneCode: req.Msg.PhoneCode,
+		FlowID:    domain.IDFrom(req.GetFlowId()),
+		EmailCode: req.EmailCode,
+		PhoneCode: req.PhoneCode,
 		Meta: application.MetaInput{
 			IPAddress: requestMeta.Peer(),
 			UserAgent: requestMeta.UserAgent(),
@@ -99,7 +96,7 @@ func (s *AuthenticationServer) CompleteRegistration(
 		return nil, err
 	}
 
-	return connect.NewResponse(&v1.CompleteRegistrationResponse{User: &v1.User{
+	return &v1.CompleteRegistrationResponse{User: &v1.User{
 		Id:        out.User.ID.String(),
 		Status:    fromUserStatus(out.User.Status),
 		Name:      out.User.Name,
@@ -107,17 +104,17 @@ func (s *AuthenticationServer) CompleteRegistration(
 		AvatarUrl: out.User.AvatarURL,
 		CreatedAt: timestamppb.New(out.User.CreatedAt),
 		UpdatedAt: timestamppb.New(out.User.UpdatedAt),
-	}}), nil
+	}}, nil
 }
 
 func (s *AuthenticationServer) ResendRegistrationCode(
 	ctx context.Context,
-	req *connect.Request[v1.ResendRegistrationCodeRequest],
-) (*connect.Response[v1.ResendRegistrationCodeResponse], error) {
+	req *v1.ResendRegistrationCodeRequest,
+) (*v1.ResendRegistrationCodeResponse, error) {
 	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.ResendRegistrationCode(ctx, application.ResendRegistrationCodeInput{
-		FlowID: domain.IDFrom(req.Msg.GetFlowId()),
+		FlowID: domain.IDFrom(req.GetFlowId()),
 		Meta: application.MetaInput{
 			IPAddress: requestMeta.Peer(),
 			UserAgent: requestMeta.UserAgent(),
@@ -127,23 +124,20 @@ func (s *AuthenticationServer) ResendRegistrationCode(
 		return nil, err
 	}
 
-	return connect.NewResponse(&v1.ResendRegistrationCodeResponse{Flow: &v1.AuthFlow{
+	return &v1.ResendRegistrationCodeResponse{Flow: &v1.AuthFlow{
 		Id:        out.Flow.ID.String(),
 		FlowType:  fromAuthFlowType(out.Flow.FlowType),
 		FlowState: fromAuthFlowState(out.Flow.FlowState),
 		ExpiresAt: timestamppb.New(out.Flow.ExpiresAt),
-	}}), nil
+	}}, nil
 }
 
-func (s *AuthenticationServer) Login(
-	ctx context.Context,
-	req *connect.Request[v1.LoginRequest],
-) (*connect.Response[v1.LoginResponse], error) {
+func (s *AuthenticationServer) Login(ctx context.Context, req *v1.LoginRequest) (*v1.LoginResponse, error) {
 	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.Login(ctx, application.LoginInput{
-		Identifier: req.Msg.GetIdentifier(),
-		Password:   req.Msg.GetPassword(),
+		Identifier: req.GetIdentifier(),
+		Password:   req.GetPassword(),
 		Meta: application.MetaInput{
 			IPAddress: requestMeta.Peer(),
 			UserAgent: requestMeta.UserAgent(),
@@ -159,7 +153,7 @@ func (s *AuthenticationServer) Login(
 			availableMfaMethods = append(availableMfaMethods, fromMfaFactorType(m))
 		}
 
-		return connect.NewResponse(&v1.LoginResponse{Result: &v1.LoginResponse_LoginMfa{LoginMfa: &v1.LoginMfa{
+		return &v1.LoginResponse{Result: &v1.LoginResponse_LoginMfa{LoginMfa: &v1.LoginMfa{
 			Flow: &v1.AuthFlow{
 				Id:        out.MFA.Flow.ID.String(),
 				FlowType:  fromAuthFlowType(out.MFA.Flow.FlowType),
@@ -167,11 +161,11 @@ func (s *AuthenticationServer) Login(
 				ExpiresAt: timestamppb.New(out.MFA.Flow.ExpiresAt),
 			},
 			AvailableMfaMethods: availableMfaMethods,
-		}}}), nil
+		}}}, nil
 	}
 
 	if out.Token != nil {
-		return connect.NewResponse(&v1.LoginResponse{Result: &v1.LoginResponse_LoginToken{LoginToken: &v1.LoginToken{
+		return &v1.LoginResponse{Result: &v1.LoginResponse_LoginToken{LoginToken: &v1.LoginToken{
 			Token: &v1.Token{
 				AccessToken:  out.Token.AccessToken,
 				RefreshToken: out.Token.RefreshToken,
@@ -187,20 +181,20 @@ func (s *AuthenticationServer) Login(
 				CreatedAt: timestamppb.New(out.Token.User.CreatedAt),
 				UpdatedAt: timestamppb.New(out.Token.User.UpdatedAt),
 			},
-		}}}), nil
+		}}}, nil
 	}
 
-	return connect.NewResponse(&v1.LoginResponse{}), nil
+	return &v1.LoginResponse{}, nil
 }
 
 func (s *AuthenticationServer) RefreshToken(
 	ctx context.Context,
-	req *connect.Request[v1.RefreshTokenRequest],
-) (*connect.Response[v1.RefreshTokenResponse], error) {
+	req *v1.RefreshTokenRequest,
+) (*v1.RefreshTokenResponse, error) {
 	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.RefreshToken(ctx, application.RefreshTokenInput{
-		RefreshToken: req.Msg.GetRefreshToken(),
+		RefreshToken: req.GetRefreshToken(),
 		Meta: application.MetaInput{
 			IPAddress: requestMeta.Peer(),
 			UserAgent: requestMeta.UserAgent(),
@@ -210,24 +204,24 @@ func (s *AuthenticationServer) RefreshToken(
 		return nil, err
 	}
 
-	return connect.NewResponse(&v1.RefreshTokenResponse{Token: &v1.Token{
+	return &v1.RefreshTokenResponse{Token: &v1.Token{
 		AccessToken:  out.Token,
 		RefreshToken: out.RefreshToken,
 		TokenType:    domain.TokenType,
 		ExpiresIn:    out.ExpiresIn,
-	}}), nil
+	}}, nil
 }
 
 func (s *AuthenticationServer) CompleteLoginMfa(
 	ctx context.Context,
-	req *connect.Request[v1.CompleteLoginMfaRequest],
-) (*connect.Response[v1.CompleteLoginMfaResponse], error) {
+	req *v1.CompleteLoginMfaRequest,
+) (*v1.CompleteLoginMfaResponse, error) {
 	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.CompleteLoginMfa(ctx, application.CompleteLoginMfaInput{
-		FlowID:     domain.IDFrom(req.Msg.GetFlowId()),
-		Code:       req.Msg.GetCode(),
-		FactorType: toMfaFactorType(req.Msg.GetFactorType()),
+		FlowID:     domain.IDFrom(req.GetFlowId()),
+		Code:       req.GetCode(),
+		FactorType: toMfaFactorType(req.GetFactorType()),
 		Meta: application.MetaInput{
 			IPAddress: requestMeta.Peer(),
 			UserAgent: requestMeta.UserAgent(),
@@ -237,7 +231,7 @@ func (s *AuthenticationServer) CompleteLoginMfa(
 		return nil, err
 	}
 
-	return connect.NewResponse(&v1.CompleteLoginMfaResponse{
+	return &v1.CompleteLoginMfaResponse{
 		Token: &v1.Token{
 			AccessToken:  out.Token,
 			RefreshToken: out.RefreshToken,
@@ -253,17 +247,17 @@ func (s *AuthenticationServer) CompleteLoginMfa(
 			CreatedAt: timestamppb.New(out.User.CreatedAt),
 			UpdatedAt: timestamppb.New(out.User.UpdatedAt),
 		},
-	}), nil
+	}, nil
 }
 
 func (s *AuthenticationServer) InitiatePasswordReset(
 	ctx context.Context,
-	req *connect.Request[v1.InitiatePasswordResetRequest],
-) (*connect.Response[v1.InitiatePasswordResetResponse], error) {
+	req *v1.InitiatePasswordResetRequest,
+) (*v1.InitiatePasswordResetResponse, error) {
 	requestMeta := meta.GetMeta(ctx)
 
 	_, err := s.service.InitiatePasswordReset(ctx, application.InitiatePasswordResetInput{
-		Identifier: req.Msg.GetIdentifier(),
+		Identifier: req.GetIdentifier(),
 		Meta: application.MetaInput{
 			IPAddress: requestMeta.Peer(),
 			UserAgent: requestMeta.UserAgent(),
@@ -273,18 +267,18 @@ func (s *AuthenticationServer) InitiatePasswordReset(
 		return nil, err
 	}
 
-	return connect.NewResponse(&v1.InitiatePasswordResetResponse{}), nil
+	return &v1.InitiatePasswordResetResponse{}, nil
 }
 
 func (s *AuthenticationServer) CompletePasswordReset(
 	ctx context.Context,
-	req *connect.Request[v1.CompletePasswordResetRequest],
-) (*connect.Response[v1.CompletePasswordResetResponse], error) {
+	req *v1.CompletePasswordResetRequest,
+) (*v1.CompletePasswordResetResponse, error) {
 	requestMeta := meta.GetMeta(ctx)
 
 	out, err := s.service.CompletePasswordReset(ctx, application.CompletePasswordResetInput{
-		Code:        req.Msg.GetCode(),
-		NewPassword: req.Msg.GetNewPassword(),
+		Code:        req.GetCode(),
+		NewPassword: req.GetNewPassword(),
 		Meta: application.MetaInput{
 			IPAddress: requestMeta.Peer(),
 			UserAgent: requestMeta.UserAgent(),
@@ -294,7 +288,7 @@ func (s *AuthenticationServer) CompletePasswordReset(
 		return nil, err
 	}
 
-	return connect.NewResponse(&v1.CompletePasswordResetResponse{User: &v1.User{
+	return &v1.CompletePasswordResetResponse{User: &v1.User{
 		Id:        out.User.ID.String(),
 		Status:    fromUserStatus(out.User.Status),
 		Name:      out.User.Name,
@@ -302,5 +296,5 @@ func (s *AuthenticationServer) CompletePasswordReset(
 		AvatarUrl: out.User.AvatarURL,
 		CreatedAt: timestamppb.New(out.User.CreatedAt),
 		UpdatedAt: timestamppb.New(out.User.UpdatedAt),
-	}}), nil
+	}}, nil
 }

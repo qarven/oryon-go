@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/qarven/oryon-go/internal/pkg/clock"
 	"github.com/qarven/oryon-go/internal/pkg/config"
@@ -41,9 +41,10 @@ type App struct {
 
 	// server
 	connectServiceNames []string
+	connectServer       *connect.Server
 	muxer               *http.ServeMux
 	httpServer          *http.Server
-	interceptors        []connect.Interceptor
+	interceptors        []connect.ServerInterceptor
 	closers             []struct {
 		name string
 		fn   func(context.Context) error

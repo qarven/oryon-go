@@ -4,11 +4,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net/http"
 
-	connectrpc "connectrpc.com/connect"
+	connectv2 "connectrpc.com/connect/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
-	otpLib "github.com/pquerna/otp"
+	pquernaotp "github.com/pquerna/otp"
 	"github.com/qarven/mono/gen/go/oryon/identity/v1/identityconnect"
 	"github.com/qarven/oryon-go/internal/identity/application"
 	"github.com/qarven/oryon-go/internal/identity/infrastructure/cache/redis"
@@ -26,21 +25,20 @@ import (
 	"github.com/qarven/oryon-go/internal/pkg/mfa"
 	"github.com/qarven/oryon-go/internal/pkg/uid"
 	"github.com/qarven/oryon-go/internal/pkg/validator"
-	redisLib "github.com/redis/go-redis/v9"
+	goredisv9 "github.com/redis/go-redis/v9"
 )
 
 type Dependency struct {
-	DBConn       *pgxpool.Pool              `validate:"required"`
-	CacheConn    *redisLib.Client           `validate:"required"`
-	Messaging    messaging.Messaging        `validate:"required"`
-	Goroutine    *goroutine.Manager         `validate:"required"`
-	Config       config.Config              `validate:"required"`
-	Instrument   instrument.Instrumentation `validate:"required"`
-	UUID         uid.ID                     `validate:"required"`
-	Clock        clock.Clocker              `validate:"required"`
-	Validator    validator.Validator        `validate:"required"`
-	Interceptors []connectrpc.Interceptor   `validate:"required"`
-	Muxer        *http.ServeMux             `validate:"required"`
+	DBConn     *pgxpool.Pool              `validate:"required"`
+	CacheConn  *goredisv9.Client          `validate:"required"`
+	Messaging  messaging.Messaging        `validate:"required"`
+	Goroutine  *goroutine.Manager         `validate:"required"`
+	Config     config.Config              `validate:"required"`
+	Instrument instrument.Instrumentation `validate:"required"`
+	UUID       uid.ID                     `validate:"required"`
+	Clock      clock.Clocker              `validate:"required"`
+	Validator  validator.Validator        `validate:"required"`
+	Server     *connectv2.Server          `validate:"required"`
 }
 
 type Expose struct {
@@ -55,11 +53,12 @@ const mfaSecretLength = 32
 var ErrInvalidMFASecretLength = errors.New("mfa secret must be 32 bytes")
 
 func New(dep Dependency) (*Expose, error) {
-	validateErr := dep.Validator.Validate(dep)
-	if validateErr != nil {
-		return nil, fmt.Errorf("validate dependencies module identity: %w", validateErr)
+	err := dep.Validator.Validate(dep)
+	if err != nil {
+		return nil, fmt.Errorf("validate dependencies module identity: %w", err)
 	}
 
+	// initiate dependencies
 	hashers := newHashers(dep.Config)
 
 	mfaParts, err := newMFAComponents(dep.Config)
@@ -72,10 +71,12 @@ func New(dep Dependency) (*Expose, error) {
 		return nil, err
 	}
 
+	// infrastructure
 	repository := postgres.New(dep.DBConn, dep.Instrument)
 	cacheRepo := redis.New(dep.CacheConn, dep.Instrument)
 	eventRepo := event.New(dep.Messaging, dep.Instrument)
 
+	// application
 	service := application.New(application.Dependency{
 		Repository:      repository,
 		CacheRepository: cacheRepo,
@@ -94,19 +95,12 @@ func New(dep Dependency) (*Expose, error) {
 		Goroutine:       dep.Goroutine,
 	})
 
-	serverAuth := connect.NewAuthenticationServer(service, dep.Config)
-
-	dep.Muxer.Handle(identityconnect.NewAuthenticationServiceHandler(
-		serverAuth,
-		connectrpc.WithInterceptors(dep.Interceptors...),
-	))
-
+	// presentation
+	serverAuth := connect.NewAuthenticationServer(service)
 	serverSession := connect.NewSessionServer(service, dep.Config)
 
-	dep.Muxer.Handle(identityconnect.NewSessionServiceHandler(
-		serverSession,
-		connectrpc.WithInterceptors(dep.Interceptors...),
-	))
+	identityconnect.RegisterAuthenticationServiceHandler(dep.Server, serverAuth)
+	identityconnect.RegisterSessionServiceHandler(dep.Server, serverSession)
 
 	return &Expose{ServiceNames: []string{
 		identityconnect.AuthenticationServiceName,
@@ -150,7 +144,7 @@ func newMFAComponents(cfg config.Config) (*mfaParts, error) {
 		cfg.GetString("mfa.totp.issuer"),
 		cfg.GetUint("mfa.totp.period"),
 		cfg.GetUint("mfa.totp.skew"),
-		otpLib.DigitsSix,
+		pquernaotp.DigitsSix,
 	)
 
 	return &mfaParts{encryption: mfaEncryption, totp: mfaTotp}, nil

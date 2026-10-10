@@ -7,10 +7,11 @@ import (
 	"os"
 	"time"
 
-	"connectrpc.com/connect"
+	"connectrpc.com/connect/v2"
+	"connectrpc.com/connect/v2/connecthttp"
 	connectcors "connectrpc.com/cors"
-	"connectrpc.com/grpchealth"
-	"connectrpc.com/grpcreflect"
+	"connectrpc.com/grpchealth/v2"
+	"connectrpc.com/grpcreflect/v2"
 	connectvalidate "connectrpc.com/validate"
 	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -244,27 +245,26 @@ func (a *App) initMessaging() {
 }
 
 func (a *App) initMiddleware() {
-	a.interceptors = []connect.Interceptor{
+	a.interceptors = []connect.ServerInterceptor{
 		middleware.NewRecoveryInterceptor(),
 		middleware.NewMetaInterceptor(),
 		middleware.NewObservabilityInterceptor(), // outermost: sets the chain ID and logs every request
 		middleware.NewMaintenanceInterceptor(a.config.GetArray("app.endpoint.maintenance")),
 		middleware.NewErrorInterceptor(),
 		// middleware.NewAuthenticationInterceptor(a.accessJWT, a.config.GetArray("app.endpoint.public")),
-		connectvalidate.NewInterceptor(connectvalidate.WithoutErrorDetails()),
+		connectvalidate.NewServerInterceptor(connectvalidate.WithoutErrorDetails()),
 	}
+	a.connectServer = connect.NewServer(a.interceptors...)
 }
 
 func (a *App) initHTTPServer() {
 	if a.config.GetBool("connect.with.reflection") {
-		reflector := grpcreflect.NewStaticReflector(a.connectServiceNames...)
-		a.muxer.Handle(grpcreflect.NewHandlerV1(reflector))
-		a.muxer.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
+		grpcreflect.Register(a.connectServer)
 	}
 
 	if a.config.GetBool("connect.with.healthcheck") {
 		checker := grpchealth.NewStaticChecker(a.connectServiceNames...)
-		a.muxer.Handle(grpchealth.NewHandler(checker))
+		grpchealth.Register(a.connectServer, checker)
 	}
 
 	corsHandler := cors.New(cors.Options{
@@ -273,6 +273,8 @@ func (a *App) initHTTPServer() {
 		AllowedHeaders: append(connectcors.AllowedHeaders(), "Authorization"),
 		ExposedHeaders: connectcors.ExposedHeaders(),
 	})
+
+	connecthttp.Mount(a.muxer, a.connectServer)
 
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
